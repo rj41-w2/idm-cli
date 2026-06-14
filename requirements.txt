@@ -1,0 +1,6 @@
+typer
+rich
+aiohttp
+aiofiles
+yt-dlp
+pyfiglet
