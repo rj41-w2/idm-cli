@@ -8,8 +8,36 @@ def fetch_all_info(url: str) -> dict:
         'noplaylist': True,
         'quiet': True,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        return ydl.extract_info(url, download=False)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            return ydl.extract_info(url, download=False)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if 'bot' in error_msg or 'cookie' in error_msg:
+            # Bypass 1: Use alternative player clients (Android, iOS, TV)
+            clients_to_try = ['android', 'ios', 'tv']
+            for client in clients_to_try:
+                ydl_opts['extractor_args'] = {'youtube': [f'player_client={client}']}
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        return ydl.extract_info(url, download=False)
+                except Exception:
+                    continue
+                    
+            # Bypass 2: Local Browser Cookies
+            if 'extractor_args' in ydl_opts:
+                del ydl_opts['extractor_args']
+                
+            for browser in ['chrome', 'edge', 'firefox', 'brave', 'opera']:
+                ydl_opts['cookiesfrombrowser'] = (browser,)
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        return ydl.extract_info(url, download=False)
+                except Exception:
+                    continue
+                    
+            raise Exception("YouTube bot protection blocked the request and bypass failed. Ensure your browser (Chrome/Edge) is FULLY CLOSED so cookies can be read, then try again.") from e
+        raise
 
 def get_video_resolutions(info: dict) -> list[dict]:
     """

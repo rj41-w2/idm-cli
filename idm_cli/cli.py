@@ -27,6 +27,14 @@ from idm_cli.downloader import download_file
 from idm_cli.muxer import mux_audio_video
 from idm_cli.state import save_download, remove_download, get_incomplete_downloads
 
+custom_style = questionary.Style([
+    ('qmark', 'fg:cyan bold'),       
+    ('question', 'bold'),               
+    ('answer', 'fg:cyan bold'),      
+    ('pointer', 'fg:cyan bold'),     
+    ('highlighted', 'fg:cyan bold'), 
+])
+
 app = typer.Typer(help="IDM-CLI: A lightning-fast YouTube downloader.")
 console = Console()
 
@@ -39,13 +47,13 @@ async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_even
                 if key == 'p' and pause_event.is_set():
                     pause_event.clear()
                     for task in progress.tasks:
-                        if "[PAUSED]" not in task.description:
-                            progress.update(task.id, description=f"[bold yellow][PAUSED][/] {task.description}")
+                        if "Paused" not in task.description:
+                            progress.update(task.id, description=f"[bold yellow]Paused[/] {task.description}")
                 elif key == 'r' and not pause_event.is_set():
                     pause_event.set()
                     for task in progress.tasks:
-                        if "[PAUSED]" in task.description:
-                            new_desc = task.description.replace("[bold yellow][PAUSED][/] ", "")
+                        if "Paused" in task.description:
+                            new_desc = task.description.replace("[bold yellow]Paused[/] ", "")
                             progress.update(task.id, description=new_desc)
         
         try:
@@ -70,19 +78,15 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
     with Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}", justify="right"),
-        BarColumn(bar_width=None),
+        BarColumn(bar_width=40),
         "[progress.percentage]{task.percentage:>3.1f}%",
-        "•",
         DownloadColumn(),
-        "•",
         TransferSpeedColumn(),
-        "•",
         TimeRemainingColumn(),
-        console=console,
-        expand=True
+        console=console
     ) as progress:
-        video_task_id = progress.add_task("[cyan]Downloading Video...", total=None)
-        audio_task_id = progress.add_task("[magenta]Downloading Audio...", total=None)
+        video_task_id = progress.add_task("[cyan]Video", total=None)
+        audio_task_id = progress.add_task("[magenta]Audio", total=None)
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event))
 
@@ -101,14 +105,16 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
     """
     banner = pyfiglet.figlet_format("IDM  CLI")
     console.print(f"[bold green]{banner}[/bold green]")
+    console.print("[bold cyan]--- The Ultimate High-Speed CLI Downloader ---[/bold cyan]\n")
     
     is_interactive = (url is None)
     
     while True:
         current_url = url
         if not current_url:
-            current_url = questionary.text("idm ").ask()
+            current_url = questionary.text("idm ", style=custom_style).ask(kbi_msg="")
             if not current_url:
+                console.print("[bold red]Cancelled by user[/bold red]")
                 raise typer.Exit()
                 
         if current_url.strip().lower() == "resume":
@@ -124,8 +130,9 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 choices.append(f"[Resume] {data['title']}")
                 choices.append(f"[Delete] {data['title']}")
                 
-            selected = questionary.select("Select an action:", choices=choices).ask()
+            selected = questionary.select("Select an action:", choices=choices, style=custom_style).ask(kbi_msg="")
             if not selected:
+                console.print("[bold red]Cancelled by user[/bold red]")
                 if not is_interactive:
                     raise typer.Exit(code=1)
                 continue
@@ -190,8 +197,9 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
 
             console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
             choices = [r['resolution'] for r in resolutions]
-            selected_res = questionary.select("Choose video quality:", choices=choices).ask()
+            selected_res = questionary.select("Choose video quality:", choices=choices, style=custom_style).ask(kbi_msg="")
             if not selected_res:
+                console.print("[bold red]Cancelled by user[/bold red]")
                 if not is_interactive:
                     raise typer.Exit(code=1)
                 continue
