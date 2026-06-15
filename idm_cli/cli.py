@@ -213,12 +213,17 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             for tid, data in incomplete.items():
                 choices.append(f"[Resume] {data['title']}")
                 choices.append(f"[Delete] {data['title']}")
+            choices.append("[Back to Main]")
                 
             selected = questionary.select("Select an action:", choices=choices, style=custom_style).ask(kbi_msg="")
             if not selected:
                 console.print("[bold red]Cancelled by user[/bold red]")
                 if not is_interactive:
                     raise typer.Exit(code=1)
+                continue
+                
+            if selected == "[Back to Main]":
+                console.print("[bold cyan]Returning to main menu...[/bold cyan]")
                 continue
                 
             action = "Resume" if selected.startswith("[Resume]") else "Delete"
@@ -256,9 +261,29 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             title = task_data['title']
         else:
             url_to_extract = current_url
-            format_id = None
-            task_id = str(uuid.uuid4())
-            console.print(f"[bold yellow]Initializing download for:[/] {current_url}\n")
+            incomplete = get_incomplete_downloads()
+            
+            found_task_id = None
+            found_task_data = None
+            
+            for tid, data in incomplete.items():
+                if data.get('url') == url_to_extract:
+                    found_task_id = tid
+                    found_task_data = data
+                    break
+                    
+            if found_task_id:
+                console.print("[bold yellow]Found in resume list! Auto-resuming...[/]")
+                task_id = found_task_id
+                format_id = found_task_data['format_id']
+                video_dest = found_task_data['video_dest']
+                audio_dest = found_task_data['audio_dest']
+                final_dest = found_task_data['final_dest']
+                title = found_task_data['title']
+            else:
+                format_id = None
+                task_id = str(uuid.uuid4())
+                console.print(f"[bold yellow]Initializing download for:[/] {current_url}\n")
 
         with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
             try:
