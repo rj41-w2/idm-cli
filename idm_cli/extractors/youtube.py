@@ -1,12 +1,12 @@
-import yt_dlp
-
 def fetch_all_info(url: str) -> dict:
     """
     Extracts all info without downloading, without strict format filtering.
     """
+    import yt_dlp
     ydl_opts = {
         'noplaylist': True,
         'quiet': True,
+        'extractor_args': {'youtube': ['player_client=android,ios']},
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

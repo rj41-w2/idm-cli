@@ -21,13 +21,14 @@ from rich.progress import (
 )
 import pyfiglet
 import questionary
+from prompt_toolkit.lexers import Lexer
 
 try:
     import msvcrt
 except ImportError:
     msvcrt = None
 
-from idm_cli.extractor import fetch_all_info, get_video_resolutions, extract_urls
+from idm_cli.extractors import get_extractor
 from idm_cli.downloader import download_file
 from idm_cli.muxer import mux_audio_video, convert_to_mp3
 from idm_cli.state import save_download, remove_download, get_incomplete_downloads
@@ -38,7 +39,18 @@ custom_style = questionary.Style([
     ('answer', 'fg:cyan bold'),      
     ('pointer', 'fg:cyan bold'),     
     ('highlighted', 'fg:cyan bold'), 
+    ('flags', 'fg:white'),
 ])
+
+class IDMLexer(Lexer):
+    def lex_document(self, document):
+        def get_line(lineno):
+            line = document.lines[lineno]
+            idx = line.find(" -")
+            if idx != -1:
+                return [('class:answer', line[:idx]), ('class:flags', line[idx:])]
+            return [('class:answer', line)]
+        return get_line
 
 app = typer.Typer(help="IDM-CLI: A lightning-fast YouTube downloader.")
 console = Console()
@@ -97,14 +109,16 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         console=console
     ) as progress:
         video_task_id = progress.add_task("[cyan]Video", total=None) if video_url else None
-        audio_task_id = progress.add_task("[magenta]Audio", total=None)
+        audio_task_id = progress.add_task("[magenta]Audio", total=None) if audio_url else None
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
         v_task = asyncio.create_task(download_file(video_url, video_dest, headers, chunks, queue, video_task_id, pause_event)) if video_url else None
-        a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event))
+        a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
 
-        tasks_to_gather = [a_task]
+        tasks_to_gather = []
+        if a_task:
+            tasks_to_gather.append(a_task)
         if v_task:
             tasks_to_gather.append(v_task)
 
@@ -115,7 +129,7 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
 
 @app.command()
 def download(
-    url: Optional[str] = typer.Argument(None, help="The YouTube URL to download."),
+    url: Optional[str] = typer.Argument(None, help="The Video URL to download."),
     chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file."),
     quality: Optional[str] = typer.Option(None, "--quality", "-q", help="Video quality (e.g., 720p, 1080p)."),
     audio_only: bool = typer.Option(False, "--audio-only", "-a", help="Download audio only."),
@@ -144,7 +158,7 @@ def download(
         current_url = url
         if not current_url:
             prompt_str = "idm (Press again ctrl+c to exit) " if show_warning else "idm "
-            current_url = questionary.text(prompt_str, style=custom_style).ask(kbi_msg="")
+            current_url = questionary.text(prompt_str, style=custom_style, lexer=IDMLexer()).ask(kbi_msg="")
             if current_url is None:
                 if time.time() - last_ctrl_c_time <= 5:
                     console.print("[bold red]Cancelled by user[/bold red]")
@@ -220,17 +234,21 @@ def download(
                 
                 with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
                     try:
-                        info = fetch_all_info(url_to_extract)
+                        extractor = get_extractor(url_to_extract)
+                        info = extractor.fetch_all_info(url_to_extract)
                     except Exception as e:
                         console.print(f"[bold red]Error fetching info:[/] {e}")
                         continue
                 
                 with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
                     try:
-                        extracted = extract_urls(info, format_id)
+                        extractor = get_extractor(url_to_extract)
+                        extracted = extractor.extract_urls(info, format_id)
                         video_url = extracted.get("video_url")
                         audio_url = extracted.get("audio_url")
                         headers = extracted.get("headers", {})
+                        if not video_url: video_dest = ""
+                        if not audio_url: audio_dest = ""
                     except Exception as e:
                         console.print(f"[bold red]Error extracting URLs:[/] {e}")
                         continue
@@ -242,10 +260,13 @@ def download(
                 try:
                     asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state))
                     with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
-                        if video_dest:
+                        if video_dest and audio_dest:
                             mux_audio_video(video_dest, audio_dest, final_dest)
-                        else:
+                        elif audio_dest and not video_dest:
                             convert_to_mp3(audio_dest, final_dest)
+                        elif video_dest and not audio_dest:
+                            import shutil
+                            shutil.move(video_dest, final_dest)
                     remove_download(tid)
                     console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
                 except KeyboardInterrupt:
@@ -341,25 +362,15 @@ def download(
                 console.print(f"[bold yellow]Initializing download for:[/] {current_url}\n")
                 
                 if loop_audio_only:
-                    dl_type = "Audio Only"
-                elif fast_mode:
-                    dl_type = "Video + Audio"
-                else:
-                    dl_type = questionary.select("Download type:", choices=["Video + Audio", "Audio Only"], style=custom_style).ask(kbi_msg="")
-                if not dl_type:
-                    console.print("[bold red]Cancelled by user[/bold red]")
-                    if not is_interactive:
-                        raise typer.Exit(code=1)
-                    continue
-                if dl_type == "Audio Only":
                     format_id = "audio_only"
 
         with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
             try:
-                info = fetch_all_info(url_to_extract)
+                extractor = get_extractor(url_to_extract)
+                info = extractor.fetch_all_info(url_to_extract)
                 title = info.get("title", "download") if not found_task_id else title
                 if not found_task_id and format_id != "audio_only":
-                    resolutions = get_video_resolutions(info)
+                    resolutions = extractor.get_video_resolutions(info)
             except Exception as e:
                 console.print(f"[bold red]Error fetching info:[/] {e}")
                 if not is_interactive:
@@ -394,7 +405,7 @@ def download(
                 selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
                 format_id = selected_format['format_id']
             
-            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()
+            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()[:60].strip()
             if format_id == "audio_only":
                 video_dest = ""
                 audio_dest = f"{safe_title}_audio.m4a"
@@ -422,10 +433,13 @@ def download(
 
         with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
             try:
-                extracted = extract_urls(info, format_id)
+                extractor = get_extractor(url_to_extract)
+                extracted = extractor.extract_urls(info, format_id)
                 video_url = extracted.get("video_url")
                 audio_url = extracted.get("audio_url")
                 headers = extracted.get("headers", {})
+                if not video_url: video_dest = ""
+                if not audio_url: audio_dest = ""
             except Exception as e:
                 console.print(f"[bold red]Error extracting URLs:[/] {e}")
                 if not is_interactive:
@@ -474,10 +488,13 @@ def download(
 
         with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
             try:
-                if video_dest:
+                if video_dest and audio_dest:
                     mux_audio_video(video_dest, audio_dest, final_dest)
-                else:
+                elif audio_dest and not video_dest:
                     convert_to_mp3(audio_dest, final_dest)
+                elif video_dest and not audio_dest:
+                    import shutil
+                    shutil.move(video_dest, final_dest)
             except Exception as e:
                 console.print(f"[bold red]Muxing failed:[/] {e}")
                 if not is_interactive:
