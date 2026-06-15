@@ -99,133 +99,158 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
     """
     Download a YouTube video at maximum speed using parallel chunks.
     """
-    banner = pyfiglet.figlet_format("IDM - CLI")
+    banner = pyfiglet.figlet_format("IDM  CLI")
     console.print(f"[bold green]{banner}[/bold green]")
     
-    if not url:
-        url = questionary.text("*idm ").ask()
-        if not url:
-            console.print("[bold red]No URL provided. Exiting.[/]")
-            raise typer.Exit()
-            
-    if url.strip().lower() == "resume":
-        incomplete = get_incomplete_downloads()
-        if not incomplete:
-            console.print("[bold green]No incomplete downloads found![/]")
-            raise typer.Exit()
-            
-        choices = []
-        for tid, data in incomplete.items():
-            choices.append(f"[Resume] {data['title']}")
-            choices.append(f"[Delete] {data['title']}")
-            
-        selected = questionary.select("Select an action:", choices=choices).ask()
-        if not selected:
-            raise typer.Exit()
-            
-        action = "Resume" if selected.startswith("[Resume]") else "Delete"
-        title_selected = selected.split("] ", 1)[1]
-        
-        task_id = None
-        task_data = None
-        for tid, data in incomplete.items():
-            if data['title'] == title_selected:
-                task_id = tid
-                task_data = data
-                break
-                
-        if action == "Delete":
-            remove_download(task_id)
-            # Remove any partial files if they exist
-            if os.path.exists(task_data['video_dest']): os.remove(task_data['video_dest'])
-            if os.path.exists(task_data['audio_dest']): os.remove(task_data['audio_dest'])
-            for i in range(32): # Clean parts up to 32 chunks
-                v_part = f"{task_data['video_dest']}.part{i}"
-                a_part = f"{task_data['audio_dest']}.part{i}"
-                if os.path.exists(v_part): os.remove(v_part)
-                if os.path.exists(a_part): os.remove(a_part)
-            console.print(f"[bold red]Deleted:[/] {title_selected}")
-            raise typer.Exit()
-            
-        console.print(f"[bold yellow]Resuming download for:[/] {title_selected}\n")
-        url_to_extract = task_data['url']
-        format_id = task_data['format_id']
-        video_dest = task_data['video_dest']
-        audio_dest = task_data['audio_dest']
-        final_dest = task_data['final_dest']
-        title = task_data['title']
-    else:
-        url_to_extract = url
-        format_id = None
-        task_id = str(uuid.uuid4())
-        console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
-
-    with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
-        try:
-            info = fetch_all_info(url_to_extract)
-            title = info.get("title", "download") if format_id is None else title
-            if format_id is None:
-                resolutions = get_video_resolutions(info)
-        except Exception as e:
-            console.print(f"[bold red]Error fetching info:[/] {e}")
-            raise typer.Exit(code=1)
-
-    if format_id is None:
-        if not resolutions:
-            console.print("[bold red]No video resolutions found.[/]")
-            raise typer.Exit(code=1)
-
-        console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
-        choices = [r['resolution'] for r in resolutions]
-        selected_res = questionary.select("Choose video quality:", choices=choices).ask()
-        if not selected_res:
-            raise typer.Exit(code=1)
-
-        selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
-        format_id = selected_format['format_id']
-        
-        safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()
-        video_dest = f"{safe_title}_video.mp4"
-        audio_dest = f"{safe_title}_audio.m4a"
-        final_dest = f"{safe_title}.mp4"
-
-    with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
-        try:
-            extracted = extract_urls(info, format_id)
-            video_url = extracted.get("video_url")
-            audio_url = extracted.get("audio_url")
-            headers = extracted.get("headers", {})
-        except Exception as e:
-            console.print(f"[bold red]Error extracting URLs:[/] {e}")
-            raise typer.Exit(code=1)
-
-    # Save state before downloading
-    save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest)
+    is_interactive = (url is None)
     
-    console.print(f"[bold green]✓[/] Using {chunks} chunks per file.")
-    console.print("[bold cyan]Starting parallel downloads... (Press 'p' to pause, 'r' to resume)[/]\n")
+    while True:
+        current_url = url
+        if not current_url:
+            current_url = questionary.text("idm ").ask()
+            if not current_url:
+                raise typer.Exit()
+                
+        if current_url.strip().lower() == "resume":
+            incomplete = get_incomplete_downloads()
+            if not incomplete:
+                console.print("[bold green]No incomplete downloads found![/]")
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
+                
+            choices = []
+            for tid, data in incomplete.items():
+                choices.append(f"[Resume] {data['title']}")
+                choices.append(f"[Delete] {data['title']}")
+                
+            selected = questionary.select("Select an action:", choices=choices).ask()
+            if not selected:
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
+                
+            action = "Resume" if selected.startswith("[Resume]") else "Delete"
+            title_selected = selected.split("] ", 1)[1]
+            
+            task_id = None
+            task_data = None
+            for tid, data in incomplete.items():
+                if data['title'] == title_selected:
+                    task_id = tid
+                    task_data = data
+                    break
+                    
+            if action == "Delete":
+                remove_download(task_id)
+                # Remove any partial files if they exist
+                if os.path.exists(task_data['video_dest']): os.remove(task_data['video_dest'])
+                if os.path.exists(task_data['audio_dest']): os.remove(task_data['audio_dest'])
+                for i in range(32): # Clean parts up to 32 chunks
+                    v_part = f"{task_data['video_dest']}.part{i}"
+                    a_part = f"{task_data['audio_dest']}.part{i}"
+                    if os.path.exists(v_part): os.remove(v_part)
+                    if os.path.exists(a_part): os.remove(a_part)
+                console.print(f"[bold red]Deleted:[/] {title_selected}")
+                if not is_interactive:
+                    raise typer.Exit(code=0)
+                continue
+                
+            console.print(f"[bold yellow]Resuming download for:[/] {title_selected}\n")
+            url_to_extract = task_data['url']
+            format_id = task_data['format_id']
+            video_dest = task_data['video_dest']
+            audio_dest = task_data['audio_dest']
+            final_dest = task_data['final_dest']
+            title = task_data['title']
+        else:
+            url_to_extract = current_url
+            format_id = None
+            task_id = str(uuid.uuid4())
+            console.print(f"[bold yellow]Initializing download for:[/] {current_url}\n")
 
-    pause_event = asyncio.Event()
-    pause_event.set()
+        with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
+            try:
+                info = fetch_all_info(url_to_extract)
+                title = info.get("title", "download") if format_id is None else title
+                if format_id is None:
+                    resolutions = get_video_resolutions(info)
+            except Exception as e:
+                console.print(f"[bold red]Error fetching info:[/] {e}")
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
 
-    try:
-        asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event))
-    except Exception as e:
-        console.print(f"[bold red]Download failed:[/] {e}")
-        raise typer.Exit(code=1)
+        if format_id is None:
+            if not resolutions:
+                console.print("[bold red]No video resolutions found.[/]")
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
 
-    console.print("\n[bold green]✓[/] Downloads completed.")
-    console.print("[bold cyan]Muxing audio and video streams...[/]")
+            console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
+            choices = [r['resolution'] for r in resolutions]
+            selected_res = questionary.select("Choose video quality:", choices=choices).ask()
+            if not selected_res:
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
 
-    with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
+            selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
+            format_id = selected_format['format_id']
+            
+            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()
+            video_dest = f"{safe_title}_video.mp4"
+            audio_dest = f"{safe_title}_audio.m4a"
+            final_dest = f"{safe_title}.mp4"
+
+        with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
+            try:
+                extracted = extract_urls(info, format_id)
+                video_url = extracted.get("video_url")
+                audio_url = extracted.get("audio_url")
+                headers = extracted.get("headers", {})
+            except Exception as e:
+                console.print(f"[bold red]Error extracting URLs:[/] {e}")
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
+
+        # Save state before downloading
+        save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest)
+        
+        console.print(f"[bold green]✓[/] Using {chunks} chunks per file.")
+        console.print("[bold cyan]Starting parallel downloads... (Press 'p' to pause, 'r' to resume)[/]\n")
+
+        pause_event = asyncio.Event()
+        pause_event.set()
+
         try:
-            mux_audio_video(video_dest, audio_dest, final_dest)
+            asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event))
         except Exception as e:
-            console.print(f"[bold red]Muxing failed:[/] {e}")
-            raise typer.Exit(code=1)
+            console.print(f"[bold red]Download failed:[/] {e}")
+            if not is_interactive:
+                raise typer.Exit(code=1)
+            continue
 
-    remove_download(task_id)
-    console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
+        console.print("\n[bold green]✓[/] Downloads completed.")
+        console.print("[bold cyan]Muxing audio and video streams...[/]")
+
+        with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
+            try:
+                mux_audio_video(video_dest, audio_dest, final_dest)
+            except Exception as e:
+                console.print(f"[bold red]Muxing failed:[/] {e}")
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                continue
+
+        remove_download(task_id)
+        console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
+        
+        if not is_interactive:
+            break
+        url = None
 
 if __name__ == "__main__":
     app()
