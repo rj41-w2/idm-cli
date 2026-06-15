@@ -1,0 +1,58 @@
+import json
+import os
+import tempfile
+
+STATE_DIR = os.path.expanduser("~/.idm_cli")
+STATE_FILE = os.path.join(STATE_DIR, "state.json")
+
+def _ensure_dir():
+    if not os.path.exists(STATE_DIR):
+        os.makedirs(STATE_DIR, exist_ok=True)
+
+def get_incomplete_downloads() -> dict:
+    """Returns the parsed JSON of incomplete downloads."""
+    if not os.path.exists(STATE_FILE):
+        return {}
+    
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+def _write_state(state: dict):
+    """Writes the state to the JSON file atomically."""
+    _ensure_dir()
+    # Write atomically using a temporary file in the same directory
+    fd, temp_path = tempfile.mkstemp(dir=STATE_DIR, prefix="state_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=4)
+        
+        # Atomically replace the target file
+        os.replace(temp_path, STATE_FILE)
+    except Exception:
+        # Clean up temp file on error
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
+
+def save_download(task_id: str, url: str, format_id: str, title: str, video_dest: str, audio_dest: str, final_dest: str):
+    """Adds or updates a download in the JSON."""
+    state = get_incomplete_downloads()
+    state[task_id] = {
+        "url": url,
+        "format_id": format_id,
+        "title": title,
+        "video_dest": video_dest,
+        "audio_dest": audio_dest,
+        "final_dest": final_dest
+    }
+    _write_state(state)
+
+def remove_download(task_id: str):
+    """Removes the entry from JSON upon completion."""
+    state = get_incomplete_downloads()
+    if task_id in state:
+        del state[task_id]
+        _write_state(state)

@@ -1,5 +1,6 @@
 import asyncio
 import os
+import uuid
 import typer
 from typing import Optional
 from rich.console import Console
@@ -16,40 +17,54 @@ from rich.progress import (
 import pyfiglet
 import questionary
 
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
+
 from idm_cli.extractor import fetch_all_info, get_video_resolutions, extract_urls
 from idm_cli.downloader import download_file
 from idm_cli.muxer import mux_audio_video
+from idm_cli.state import save_download, remove_download, get_incomplete_downloads
 
 app = typer.Typer(help="IDM-CLI: A lightning-fast YouTube downloader.")
 console = Console()
 
-async def progress_listener(queue: asyncio.Queue, progress: Progress):
+async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_event: asyncio.Event = None):
     """Listens for progress updates from the downloader and updates the Rich progress bar."""
     while True:
-        update = await queue.get()
+        if pause_event and msvcrt:
+            if msvcrt.kbhit():
+                key = msvcrt.getch().decode('utf-8', 'ignore').lower()
+                if key == 'p' and pause_event.is_set():
+                    pause_event.clear()
+                    for task in progress.tasks:
+                        if "[PAUSED]" not in task.description:
+                            progress.update(task.id, description=f"[bold yellow][PAUSED][/] {task.description}")
+                elif key == 'r' and not pause_event.is_set():
+                    pause_event.set()
+                    for task in progress.tasks:
+                        if "[PAUSED]" in task.description:
+                            new_desc = task.description.replace("[bold yellow][PAUSED][/] ", "")
+                            progress.update(task.id, description=new_desc)
+        
+        try:
+            update = await asyncio.wait_for(queue.get(), timeout=0.1)
+        except asyncio.TimeoutError:
+            continue
+            
         if update is None:
             break  # Signal to stop
         
         task_id = update.get('task_id')
         if 'total_size' in update:
-            # Set total size dynamically without affecting current progress
             progress.update(task_id, total=update['total_size'])
         elif 'bytes_downloaded' in update:
-            # Safely increment existing task's progress by the new delta.
-            # We NEVER create a new progress bar task for retries, and we only `advance`
-            # by newly downloaded bytes. This prevents any progress bar jumping or duplication.
             progress.advance(task_id, advance=update['bytes_downloaded'])
             
         queue.task_done()
 
-async def download_media(video_url: str, audio_url: str, headers: dict, title: str):
-    # Sanitize title for filename
-    safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()
-    
-    video_dest = f"{safe_title}_video.mp4"
-    audio_dest = f"{safe_title}_audio.m4a"
-    final_dest = f"{safe_title}.mp4"
-
+async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event):
     queue = asyncio.Queue()
 
     with Progress(
@@ -66,41 +81,24 @@ async def download_media(video_url: str, audio_url: str, headers: dict, title: s
         console=console,
         expand=True
     ) as progress:
-        
-        # We don't know the exact size until we fetch headers, so we initialize with total=0
-        # The downloader can update the total size, but since our downloader signature 
-        # (based on prompt) just expects task_id and sends chunk sizes, we'll need the 
-        # downloader to send the total size as a special message, or just let the downloader
-        # fetch the size and maybe we can just advance.
-        # Actually, let's update the downloader to send `(task_id, chunk_size, total_size)` 
-        # so we can dynamically set the total. 
-        # Wait, the downloader prompt was: `put progress updates (like chunk sizes downloaded) into the queue`.
-        
         video_task_id = progress.add_task("[cyan]Downloading Video...", total=None)
         audio_task_id = progress.add_task("[magenta]Downloading Audio...", total=None)
 
-        # Start the listener
-        listener = asyncio.create_task(progress_listener(queue, progress))
+        listener = asyncio.create_task(progress_listener(queue, progress, pause_event))
 
-        # Start downloads
-        v_task = asyncio.create_task(download_file(video_url, video_dest, headers, 8, queue, video_task_id))
-        a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, 8, queue, audio_task_id))
+        v_task = asyncio.create_task(download_file(video_url, video_dest, headers, chunks, queue, video_task_id, pause_event))
+        a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event))
 
         await asyncio.gather(v_task, a_task)
 
-        # Stop the listener
         await queue.put(None)
         await listener
-
-    return video_dest, audio_dest, final_dest
-
 
 @app.command()
 def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to download."), chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file.")):
     """
     Download a YouTube video at maximum speed using parallel chunks.
     """
-    # Print Banner
     banner = pyfiglet.figlet_format("IDM - CLI")
     console.print(f"[bold green]{banner}[/bold green]")
     
@@ -110,52 +108,108 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             console.print("[bold red]No URL provided. Exiting.[/]")
             raise typer.Exit()
             
-    console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
+    if url.strip().lower() == "resume":
+        incomplete = get_incomplete_downloads()
+        if not incomplete:
+            console.print("[bold green]No incomplete downloads found![/]")
+            raise typer.Exit()
+            
+        choices = []
+        for tid, data in incomplete.items():
+            choices.append(f"[Resume] {data['title']}")
+            choices.append(f"[Delete] {data['title']}")
+            
+        selected = questionary.select("Select an action:", choices=choices).ask()
+        if not selected:
+            raise typer.Exit()
+            
+        action = "Resume" if selected.startswith("[Resume]") else "Delete"
+        title_selected = selected.split("] ", 1)[1]
+        
+        task_id = None
+        task_data = None
+        for tid, data in incomplete.items():
+            if data['title'] == title_selected:
+                task_id = tid
+                task_data = data
+                break
+                
+        if action == "Delete":
+            remove_download(task_id)
+            # Remove any partial files if they exist
+            if os.path.exists(task_data['video_dest']): os.remove(task_data['video_dest'])
+            if os.path.exists(task_data['audio_dest']): os.remove(task_data['audio_dest'])
+            for i in range(32): # Clean parts up to 32 chunks
+                v_part = f"{task_data['video_dest']}.part{i}"
+                a_part = f"{task_data['audio_dest']}.part{i}"
+                if os.path.exists(v_part): os.remove(v_part)
+                if os.path.exists(a_part): os.remove(a_part)
+            console.print(f"[bold red]Deleted:[/] {title_selected}")
+            raise typer.Exit()
+            
+        console.print(f"[bold yellow]Resuming download for:[/] {title_selected}\n")
+        url_to_extract = task_data['url']
+        format_id = task_data['format_id']
+        video_dest = task_data['video_dest']
+        audio_dest = task_data['audio_dest']
+        final_dest = task_data['final_dest']
+        title = task_data['title']
+    else:
+        url_to_extract = url
+        format_id = None
+        task_id = str(uuid.uuid4())
+        console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
 
-    with console.status("[bold cyan]Fetching available resolutions...", spinner="dots"):
+    with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
         try:
-            info = fetch_all_info(url)
-            resolutions = get_video_resolutions(info)
-            title = info.get("title", "download")
+            info = fetch_all_info(url_to_extract)
+            title = info.get("title", "download") if format_id is None else title
+            if format_id is None:
+                resolutions = get_video_resolutions(info)
         except Exception as e:
             console.print(f"[bold red]Error fetching info:[/] {e}")
             raise typer.Exit(code=1)
 
-    if not resolutions:
-        console.print("[bold red]No video resolutions found.[/]")
-        raise typer.Exit(code=1)
+    if format_id is None:
+        if not resolutions:
+            console.print("[bold red]No video resolutions found.[/]")
+            raise typer.Exit(code=1)
 
-    console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
+        console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
+        choices = [r['resolution'] for r in resolutions]
+        selected_res = questionary.select("Choose video quality:", choices=choices).ask()
+        if not selected_res:
+            raise typer.Exit(code=1)
 
-    choices = [r['resolution'] for r in resolutions]
-    selected_res = questionary.select(
-        "Choose video quality:",
-        choices=choices
-    ).ask()
+        selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
+        format_id = selected_format['format_id']
+        
+        safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()
+        video_dest = f"{safe_title}_video.mp4"
+        audio_dest = f"{safe_title}_audio.m4a"
+        final_dest = f"{safe_title}.mp4"
 
-    if not selected_res:
-        console.print("[bold red]Download cancelled.[/]")
-        raise typer.Exit(code=1)
-
-    selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
-
-    with console.status(f"[bold cyan]Extracting URLs for {selected_res}...", spinner="dots"):
+    with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
         try:
-            extracted = extract_urls(info, selected_format['format_id'])
+            extracted = extract_urls(info, format_id)
             video_url = extracted.get("video_url")
             audio_url = extracted.get("audio_url")
             headers = extracted.get("headers", {})
-            title = extracted.get("title", "download")
         except Exception as e:
             console.print(f"[bold red]Error extracting URLs:[/] {e}")
             raise typer.Exit(code=1)
 
+    # Save state before downloading
+    save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest)
+    
     console.print(f"[bold green]✓[/] Using {chunks} chunks per file.")
-    console.print("[bold cyan]Starting parallel downloads...[/]\n")
+    console.print("[bold cyan]Starting parallel downloads... (Press 'p' to pause, 'r' to resume)[/]\n")
 
-    # Run async download
+    pause_event = asyncio.Event()
+    pause_event.set()
+
     try:
-        video_dest, audio_dest, final_dest = asyncio.run(download_media(video_url, audio_url, headers, title))
+        asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event))
     except Exception as e:
         console.print(f"[bold red]Download failed:[/] {e}")
         raise typer.Exit(code=1)
@@ -170,8 +224,8 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             console.print(f"[bold red]Muxing failed:[/] {e}")
             raise typer.Exit(code=1)
 
+    remove_download(task_id)
     console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
-
 
 if __name__ == "__main__":
     app()

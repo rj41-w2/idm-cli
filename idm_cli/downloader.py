@@ -3,7 +3,7 @@ import os
 import aiohttp
 import aiofiles
 
-async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id):
+async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None):
     chunk_path = f"{dest_path}.part{chunk_index}"
     max_retries = 5
     retry_count = 0
@@ -33,6 +33,8 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                 mode = 'ab' if existing_size > 0 else 'wb'
                 async with aiofiles.open(chunk_path, mode) as f:
                     async for chunk in response.content.iter_chunked(1024 * 1024):
+                        if pause_event is not None:
+                            await pause_event.wait()
                         if not chunk:
                             break
                         await f.write(chunk)
@@ -55,10 +57,17 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                 raise Exception(f"Chunk {chunk_index} failed after {max_retries} retries: {e}")
             await asyncio.sleep(2 ** retry_count)
 
-async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int = 8, progress_queue: asyncio.Queue = None, task_id = None):
+async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int = 8, progress_queue: asyncio.Queue = None, task_id = None, pause_event: asyncio.Event = None):
     """
     Downloads a file in multiple chunks concurrently using aiohttp and aiofiles.
     """
+    if os.path.exists(dest_path):
+        file_size = os.path.getsize(dest_path)
+        if progress_queue is not None and task_id is not None:
+            await progress_queue.put({'task_id': task_id, 'total_size': file_size})
+            await progress_queue.put({'task_id': task_id, 'bytes_downloaded': file_size})
+        return
+
     if headers is None:
         headers = {}
         
@@ -91,7 +100,7 @@ async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int
                 
         if not file_size:
             # Fallback to single chunk download
-            chunk_path = await _download_chunk(session, url, 0, None, 0, dest_path, headers, progress_queue, task_id)
+            chunk_path = await _download_chunk(session, url, 0, None, 0, dest_path, headers, progress_queue, task_id, pause_event)
             os.rename(chunk_path, dest_path)
             return
 
@@ -100,6 +109,18 @@ async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int
                 'task_id': task_id,
                 'total_size': file_size
             })
+            
+            total_existing_size = 0
+            for i in range(num_chunks):
+                chunk_path = f"{dest_path}.part{i}"
+                if os.path.exists(chunk_path):
+                    total_existing_size += os.path.getsize(chunk_path)
+            
+            if total_existing_size > 0:
+                await progress_queue.put({
+                    'task_id': task_id,
+                    'bytes_downloaded': total_existing_size
+                })
 
         chunk_size = file_size // num_chunks
         tasks = []
@@ -107,7 +128,7 @@ async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int
             start = i * chunk_size
             end = file_size - 1 if i == num_chunks - 1 else (start + chunk_size - 1)
             tasks.append(
-                _download_chunk(session, url, start, end, i, dest_path, headers, progress_queue, task_id)
+                _download_chunk(session, url, start, end, i, dest_path, headers, progress_queue, task_id, pause_event)
             )
             
         chunk_paths = await asyncio.gather(*tasks)
