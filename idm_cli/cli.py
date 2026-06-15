@@ -1,7 +1,10 @@
 import asyncio
 import os
+import sys
+import time
 import uuid
 import typer
+import signal
 from typing import Optional
 from rich.console import Console
 from rich.progress import (
@@ -38,9 +41,15 @@ custom_style = questionary.Style([
 app = typer.Typer(help="IDM-CLI: A lightning-fast YouTube downloader.")
 console = Console()
 
-async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_event: asyncio.Event = None):
+async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_event: asyncio.Event = None, warning_state: dict = None):
     """Listens for progress updates from the downloader and updates the Rich progress bar."""
     while True:
+        if warning_state and warning_state.get("show"):
+            for task in progress.tasks:
+                if "[WARNING: Press Ctrl+C again to cancel]" not in task.description:
+                    progress.update(task.id, description=f"[bold yellow][WARNING: Press Ctrl+C again to cancel][/] {task.description}")
+            warning_state["show"] = False
+
         if pause_event and msvcrt:
             if msvcrt.kbhit():
                 key = msvcrt.getch().decode('utf-8', 'ignore').lower()
@@ -72,7 +81,7 @@ async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_even
             
         queue.task_done()
 
-async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event):
+async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event, warning_state: dict = None):
     queue = asyncio.Queue()
 
     with Progress(
@@ -88,7 +97,7 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         video_task_id = progress.add_task("[cyan]Video", total=None)
         audio_task_id = progress.add_task("[magenta]Audio", total=None)
 
-        listener = asyncio.create_task(progress_listener(queue, progress, pause_event))
+        listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
         v_task = asyncio.create_task(download_file(video_url, video_dest, headers, chunks, queue, video_task_id, pause_event))
         a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event))
@@ -105,17 +114,42 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
     """
     banner = pyfiglet.figlet_format("IDM  CLI")
     console.print(f"[bold green]{banner}[/bold green]")
-    console.print("[bold cyan]--- The Ultimate High-Speed CLI Downloader ---[/bold cyan]\n")
+    console.print("[bold cyan]--- The Ultimate High-Speed CLI Downloader ---[/bold cyan]")
+    console.print("Type 'help' for available commands\n", style="white")
     
     is_interactive = (url is None)
+    last_ctrl_c_time = 0
+    show_warning = False
     
     while True:
         current_url = url
         if not current_url:
-            current_url = questionary.text("idm ", style=custom_style).ask(kbi_msg="")
-            if not current_url:
-                console.print("[bold red]Cancelled by user[/bold red]")
-                raise typer.Exit()
+            prompt_str = "idm (Press again ctrl+c to exit) " if show_warning else "idm "
+            current_url = questionary.text(prompt_str, style=custom_style).ask(kbi_msg="")
+            if current_url is None:
+                if time.time() - last_ctrl_c_time <= 5:
+                    console.print("[bold red]Cancelled by user[/bold red]")
+                    raise typer.Exit()
+                else:
+                    last_ctrl_c_time = time.time()
+                    show_warning = True
+                    continue
+            elif not current_url.strip():
+                continue
+        
+        last_ctrl_c_time = 0
+        show_warning = False
+        if current_url.strip().lower() == "help":
+            console.print("\n[bold cyan]Available Commands:[/bold cyan]")
+            console.print("  [bold green]<URL>[/bold green]    - Paste a YouTube URL to download")
+            console.print("  [bold green]resume[/bold green] - Resume or delete an incomplete download")
+            console.print("  [bold green]help[/bold green]   - Show this help menu")
+            console.print("  [bold green]exit[/bold green]   - Exit the application\n")
+            continue
+            
+        if current_url.strip().lower() == "exit":
+            console.print("[bold green]Goodbye![/bold green]")
+            raise typer.Exit()
                 
         if current_url.strip().lower() == "resume":
             incomplete = get_incomplete_downloads()
@@ -233,13 +267,33 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         pause_event = asyncio.Event()
         pause_event.set()
 
+        last_dl_ctrl_c = 0.0
+        original_sigint = signal.getsignal(signal.SIGINT)
+        warning_state = {"show": False}
+
+        def custom_handler(signum, frame):
+            nonlocal last_dl_ctrl_c
+            if time.time() - last_dl_ctrl_c <= 5:
+                signal.signal(signal.SIGINT, original_sigint)
+                os.kill(os.getpid(), signal.SIGINT)
+            else:
+                warning_state["show"] = True
+                last_dl_ctrl_c = time.time()
+
+        signal.signal(signal.SIGINT, custom_handler)
+
         try:
-            asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event))
+            asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event, warning_state))
+        except KeyboardInterrupt:
+            console.print("\n[bold red]Download cancelled by user. Progress saved to resume later.[/bold red]")
+            continue
         except Exception as e:
             console.print(f"[bold red]Download failed:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=1)
             continue
+        finally:
+            signal.signal(signal.SIGINT, original_sigint)
 
         console.print("\n[bold green]✓[/] Downloads completed.")
         console.print("[bold cyan]Muxing audio and video streams...[/]")
