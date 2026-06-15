@@ -27,7 +27,7 @@ except ImportError:
 
 from idm_cli.extractor import fetch_all_info, get_video_resolutions, extract_urls
 from idm_cli.downloader import download_file
-from idm_cli.muxer import mux_audio_video
+from idm_cli.muxer import mux_audio_video, convert_to_mp3
 from idm_cli.state import save_download, remove_download, get_incomplete_downloads
 
 custom_style = questionary.Style([
@@ -94,15 +94,19 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         TimeRemainingColumn(),
         console=console
     ) as progress:
-        video_task_id = progress.add_task("[cyan]Video", total=None)
+        video_task_id = progress.add_task("[cyan]Video", total=None) if video_url else None
         audio_task_id = progress.add_task("[magenta]Audio", total=None)
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
-        v_task = asyncio.create_task(download_file(video_url, video_dest, headers, chunks, queue, video_task_id, pause_event))
+        v_task = asyncio.create_task(download_file(video_url, video_dest, headers, chunks, queue, video_task_id, pause_event)) if video_url else None
         a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event))
 
-        await asyncio.gather(v_task, a_task)
+        tasks_to_gather = [a_task]
+        if v_task:
+            tasks_to_gather.append(v_task)
+
+        await asyncio.gather(*tasks_to_gather)
 
         await queue.put(None)
         await listener
@@ -139,6 +143,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         
         last_ctrl_c_time = 0
         show_warning = False
+        found_task_id = None
         if current_url.strip().lower() == "help":
             console.print("\n[bold cyan]Available Commands:[/bold cyan]")
             console.print("  [bold green]<URL>[/bold green]    - Paste a YouTube URL to download")
@@ -192,7 +197,10 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 try:
                     asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event, warning_state))
                     with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
-                        mux_audio_video(video_dest, audio_dest, final_dest)
+                        if video_dest:
+                            mux_audio_video(video_dest, audio_dest, final_dest)
+                        else:
+                            convert_to_mp3(audio_dest, final_dest)
                     remove_download(tid)
                     console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
                 except KeyboardInterrupt:
@@ -259,11 +267,11 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             audio_dest = task_data['audio_dest']
             final_dest = task_data['final_dest']
             title = task_data['title']
+            found_task_id = task_id
         else:
             url_to_extract = current_url
             incomplete = get_incomplete_downloads()
             
-            found_task_id = None
             found_task_data = None
             
             for tid, data in incomplete.items():
@@ -284,12 +292,21 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 format_id = None
                 task_id = str(uuid.uuid4())
                 console.print(f"[bold yellow]Initializing download for:[/] {current_url}\n")
+                
+                dl_type = questionary.select("Download type:", choices=["Video + Audio", "Audio Only"], style=custom_style).ask(kbi_msg="")
+                if not dl_type:
+                    console.print("[bold red]Cancelled by user[/bold red]")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    continue
+                if dl_type == "Audio Only":
+                    format_id = "audio_only"
 
         with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
             try:
                 info = fetch_all_info(url_to_extract)
-                title = info.get("title", "download") if format_id is None else title
-                if format_id is None:
+                title = info.get("title", "download") if not found_task_id else title
+                if not found_task_id and format_id != "audio_only":
                     resolutions = get_video_resolutions(info)
             except Exception as e:
                 console.print(f"[bold red]Error fetching info:[/] {e}")
@@ -297,29 +314,35 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                     raise typer.Exit(code=1)
                 continue
 
-        if format_id is None:
-            if not resolutions:
-                console.print("[bold red]No video resolutions found.[/]")
-                if not is_interactive:
-                    raise typer.Exit(code=1)
-                continue
+        if not found_task_id:
+            if format_id != "audio_only":
+                if not resolutions:
+                    console.print("[bold red]No video resolutions found.[/]")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    continue
 
-            console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
-            choices = [r['resolution'] for r in resolutions]
-            selected_res = questionary.select("Choose video quality:", choices=choices, style=custom_style).ask(kbi_msg="")
-            if not selected_res:
-                console.print("[bold red]Cancelled by user[/bold red]")
-                if not is_interactive:
-                    raise typer.Exit(code=1)
-                continue
+                console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
+                choices = [r['resolution'] for r in resolutions]
+                selected_res = questionary.select("Choose video quality:", choices=choices, style=custom_style).ask(kbi_msg="")
+                if not selected_res:
+                    console.print("[bold red]Cancelled by user[/bold red]")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    continue
 
-            selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
-            format_id = selected_format['format_id']
+                selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
+                format_id = selected_format['format_id']
             
             safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()
-            video_dest = f"{safe_title}_video.mp4"
-            audio_dest = f"{safe_title}_audio.m4a"
-            final_dest = f"{safe_title}.mp4"
+            if format_id == "audio_only":
+                video_dest = ""
+                audio_dest = f"{safe_title}_audio.m4a"
+                final_dest = f"{safe_title}.mp3"
+            else:
+                video_dest = f"{safe_title}_video.mp4"
+                audio_dest = f"{safe_title}_audio.m4a"
+                final_dest = f"{safe_title}.mp4"
 
             action = questionary.select("Action:", choices=["Download Now", "Add to Queue"], style=custom_style).ask(kbi_msg="")
             if not action:
@@ -384,7 +407,10 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
 
         with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
             try:
-                mux_audio_video(video_dest, audio_dest, final_dest)
+                if video_dest:
+                    mux_audio_video(video_dest, audio_dest, final_dest)
+                else:
+                    convert_to_mp3(audio_dest, final_dest)
             except Exception as e:
                 console.print(f"[bold red]Muxing failed:[/] {e}")
                 if not is_interactive:

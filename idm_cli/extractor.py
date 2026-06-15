@@ -85,12 +85,13 @@ def extract_urls(info: dict, video_format_id: str) -> dict:
     audio_url = None
     
     # Find video
-    for fmt in formats:
-        if str(fmt.get('format_id')) == str(video_format_id):
-            video_url = fmt.get('url')
-            if fmt.get('http_headers'):
-                headers.update(fmt.get('http_headers'))
-            break
+    if video_format_id != "audio_only":
+        for fmt in formats:
+            if str(fmt.get('format_id')) == str(video_format_id):
+                video_url = fmt.get('url')
+                if fmt.get('http_headers'):
+                    headers.update(fmt.get('http_headers'))
+                break
             
     # Find best audio (yt-dlp normally sorts formats from worst to best overall, 
     # but let's just find the last one that is audio-only, or sort by abr)

@@ -38,3 +38,34 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
     except subprocess.CalledProcessError as e:
         logger.error(f"FFmpeg muxing failed: {e.stderr.decode('utf-8', errors='replace')}")
         raise RuntimeError(f"FFmpeg muxing failed: {e}")
+
+def convert_to_mp3(audio_path: str, output_path: str) -> None:
+    """
+    Converts an audio file to mp3 using ffmpeg.
+    Deletes the original audio file upon success.
+    """
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", audio_path,
+        "-q:a", "0",
+        "-map", "a",
+        output_path
+    ]
+
+    try:
+        logger.info(f"Converting {audio_path} into {output_path}")
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        logger.info("Conversion successful. Deleting original file.")
+        try:
+            os.remove(audio_path)
+        except OSError as e:
+            logger.warning(f"Failed to delete original file: {e}")
+            
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg conversion failed: {e.stderr.decode('utf-8', errors='replace')}")
+        raise RuntimeError(f"FFmpeg conversion failed: {e}")

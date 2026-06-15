@@ -12,6 +12,7 @@ dist/
 # Media and Temp files
 *.mp4
 *.m4a
+*.mp3
 *.part*
 
 # Environments
