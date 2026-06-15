@@ -1,6 +1,7 @@
 import asyncio
 import os
 import typer
+from typing import Optional
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -95,13 +96,20 @@ async def download_media(video_url: str, audio_url: str, headers: dict, title: s
 
 
 @app.command()
-def download(url: str, chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file.")):
+def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to download."), chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file.")):
     """
     Download a YouTube video at maximum speed using parallel chunks.
     """
     # Print Banner
     banner = pyfiglet.figlet_format("IDM - CLI")
     console.print(f"[bold green]{banner}[/bold green]")
+    
+    if not url:
+        url = questionary.text("*idm ").ask()
+        if not url:
+            console.print("[bold red]No URL provided. Exiting.[/]")
+            raise typer.Exit()
+            
     console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
 
     with console.status("[bold cyan]Fetching available resolutions...", spinner="dots"):

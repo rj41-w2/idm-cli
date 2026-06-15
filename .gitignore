@@ -1,1 +1,24 @@
-__pycache__
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Packages
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Media and Temp files
+*.mp4
+*.m4a
+*.part*
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
