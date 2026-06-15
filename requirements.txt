@@ -4,3 +4,4 @@ aiohttp
 aiofiles
 yt-dlp
 pyfiglet
+questionary

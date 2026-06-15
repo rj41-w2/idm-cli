@@ -13,8 +13,9 @@ from rich.progress import (
     TransferSpeedColumn
 )
 import pyfiglet
+import questionary
 
-from idm_cli.extractor import extract_info
+from idm_cli.extractor import fetch_all_info, get_video_resolutions, extract_urls
 from idm_cli.downloader import download_file
 from idm_cli.muxer import mux_audio_video
 
@@ -30,8 +31,12 @@ async def progress_listener(queue: asyncio.Queue, progress: Progress):
         
         task_id = update.get('task_id')
         if 'total_size' in update:
+            # Set total size dynamically without affecting current progress
             progress.update(task_id, total=update['total_size'])
         elif 'bytes_downloaded' in update:
+            # Safely increment existing task's progress by the new delta.
+            # We NEVER create a new progress bar task for retries, and we only `advance`
+            # by newly downloaded bytes. This prevents any progress bar jumping or duplication.
             progress.advance(task_id, advance=update['bytes_downloaded'])
             
         queue.task_done()
@@ -99,18 +104,44 @@ def download(url: str, chunks: int = typer.Option(8, "--chunks", "-c", help="Num
     console.print(f"[bold green]{banner}[/bold green]")
     console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
 
-    with console.status("[bold cyan]Extracting media URLs and headers...", spinner="dots"):
+    with console.status("[bold cyan]Fetching available resolutions...", spinner="dots"):
         try:
-            info = extract_info(url)
-            video_url = info.get("video_url")
-            audio_url = info.get("audio_url")
-            headers = info.get("headers", {})
+            info = fetch_all_info(url)
+            resolutions = get_video_resolutions(info)
             title = info.get("title", "download")
         except Exception as e:
-            console.print(f"[bold red]Error extracting info:[/] {e}")
+            console.print(f"[bold red]Error fetching info:[/] {e}")
             raise typer.Exit(code=1)
 
-    console.print(f"[bold green]✓[/] Extracted Info for: [bold white]{title}[/]")
+    if not resolutions:
+        console.print("[bold red]No video resolutions found.[/]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
+
+    choices = [r['resolution'] for r in resolutions]
+    selected_res = questionary.select(
+        "Choose video quality:",
+        choices=choices
+    ).ask()
+
+    if not selected_res:
+        console.print("[bold red]Download cancelled.[/]")
+        raise typer.Exit(code=1)
+
+    selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
+
+    with console.status(f"[bold cyan]Extracting URLs for {selected_res}...", spinner="dots"):
+        try:
+            extracted = extract_urls(info, selected_format['format_id'])
+            video_url = extracted.get("video_url")
+            audio_url = extracted.get("audio_url")
+            headers = extracted.get("headers", {})
+            title = extracted.get("title", "download")
+        except Exception as e:
+            console.print(f"[bold red]Error extracting URLs:[/] {e}")
+            raise typer.Exit(code=1)
+
     console.print(f"[bold green]✓[/] Using {chunks} chunks per file.")
     console.print("[bold cyan]Starting parallel downloads...[/]\n")
 

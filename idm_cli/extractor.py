@@ -1,43 +1,79 @@
 import yt_dlp
 
-def extract_info(url: str) -> dict:
+def fetch_all_info(url: str) -> dict:
     """
-    Extracts the best video-only and audio-only URLs, along with required
-    HTTP headers and title from a given YouTube URL using yt-dlp.
+    Extracts all info without downloading, without strict format filtering.
     """
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
         'noplaylist': True,
         'quiet': True,
     }
-    
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        
-    title = info.get('title', 'Unknown Title')
+        return ydl.extract_info(url, download=False)
+
+def get_video_resolutions(info: dict) -> list[dict]:
+    """
+    Parse formats from info, filter out audio-only streams,
+    group/deduplicate by resolution (e.g. '1080p', '720p'),
+    and return list of dicts with 'resolution' and 'format_id', sorted highest to lowest.
+    """
+    formats = info.get('formats', [])
+    resolutions = {}
     
-    video_url = None
-    audio_url = None
+    for fmt in formats:
+        # filter out audio-only streams
+        if fmt.get('vcodec') == 'none':
+            continue
+            
+        height = fmt.get('height')
+        if not height:
+            continue
+            
+        res_str = f"{height}p"
+        fmt_id = fmt.get('format_id')
+        
+        # Keep track of resolutions we've seen.
+        if height not in resolutions:
+            resolutions[height] = {
+                'resolution': res_str,
+                'format_id': fmt_id
+            }
+            
+    # Sort by height descending
+    sorted_heights = sorted(resolutions.keys(), reverse=True)
+    return [resolutions[h] for h in sorted_heights]
+
+def extract_urls(info: dict, video_format_id: str) -> dict:
+    """
+    Find specific video format URL using video_format_id.
+    Find best audio format URL (vcodec == 'none' and acodec != 'none').
+    Extract http_headers and title.
+    """
+    title = info.get('title', 'Unknown Title')
     headers = info.get('http_headers', {}).copy()
     
-    # yt-dlp usually populates 'requested_formats' when multiple formats
-    # (like video and audio separately) are requested.
-    if 'requested_formats' in info:
-        for fmt in info['requested_formats']:
-            fmt_headers = fmt.get('http_headers', {})
+    formats = info.get('formats', [])
+    video_url = None
+    audio_url = None
+    
+    # Find video
+    for fmt in formats:
+        if str(fmt.get('format_id')) == str(video_format_id):
+            video_url = fmt.get('url')
+            if fmt.get('http_headers'):
+                headers.update(fmt.get('http_headers'))
+            break
             
-            if fmt.get('vcodec') != 'none':
-                video_url = fmt.get('url')
-                headers.update(fmt_headers)
-                
-            if fmt.get('acodec') != 'none' and fmt.get('vcodec') == 'none':
-                audio_url = fmt.get('url')
-                headers.update(fmt_headers)
-    else:
-        # Fallback: A single format containing both video and audio
-        video_url = info.get('url')
-        if info.get('http_headers'):
-            headers.update(info.get('http_headers'))
+    # Find best audio (yt-dlp normally sorts formats from worst to best overall, 
+    # but let's just find the last one that is audio-only, or sort by abr)
+    audio_formats = [f for f in formats if f.get('vcodec') == 'none' and f.get('acodec') != 'none']
+    if audio_formats:
+        # Sort by audio bitrate if available
+        audio_formats.sort(key=lambda x: x.get('abr', 0) or 0)
+        best_audio = audio_formats[-1]
+        audio_url = best_audio.get('url')
+        if best_audio.get('http_headers'):
+            headers.update(best_audio.get('http_headers'))
             
     return {
         'video_url': video_url,

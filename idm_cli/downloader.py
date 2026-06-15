@@ -4,28 +4,56 @@ import aiohttp
 import aiofiles
 
 async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id):
-    chunk_headers = headers.copy() if headers else {}
-    if end is None:
-        chunk_headers['Range'] = f'bytes={start}-'
-    else:
-        chunk_headers['Range'] = f'bytes={start}-{end}'
-    
     chunk_path = f"{dest_path}.part{chunk_index}"
+    max_retries = 5
+    retry_count = 0
     
-    async with session.get(url, headers=chunk_headers) as response:
-        response.raise_for_status()
-        async with aiofiles.open(chunk_path, 'wb') as f:
-            async for chunk in response.content.iter_chunked(1024 * 1024):
-                if not chunk:
-                    break
-                await f.write(chunk)
-                if progress_queue is not None and task_id is not None:
-                    await progress_queue.put({
-                        'task_id': task_id,
-                        'chunk_index': chunk_index,
-                        'bytes_downloaded': len(chunk)
-                    })
-    return chunk_path
+    while retry_count < max_retries:
+        try:
+            # Determine how much of this chunk has already been downloaded (from prior failed attempts)
+            existing_size = 0
+            if os.path.exists(chunk_path):
+                existing_size = os.path.getsize(chunk_path)
+                
+            current_start = start + existing_size
+            
+            # If we've already downloaded this entire chunk, return immediately
+            if end is not None and current_start > end:
+                return chunk_path
+                
+            chunk_headers = headers.copy() if headers else {}
+            if end is None:
+                chunk_headers['Range'] = f'bytes={current_start}-'
+            else:
+                chunk_headers['Range'] = f'bytes={current_start}-{end}'
+            
+            async with session.get(url, headers=chunk_headers) as response:
+                response.raise_for_status()
+                # Use append mode ('ab') to resume writing if we already have data, avoiding overwrite
+                mode = 'ab' if existing_size > 0 else 'wb'
+                async with aiofiles.open(chunk_path, mode) as f:
+                    async for chunk in response.content.iter_chunked(1024 * 1024):
+                        if not chunk:
+                            break
+                        await f.write(chunk)
+                        if progress_queue is not None and task_id is not None:
+                            # IMPORTANT BUG PREVENTION: 
+                            # We ONLY report the newly downloaded bytes for this specific iteration.
+                            # We DO NOT report `existing_size` because those bytes were already sent 
+                            # to the progress queue during a previous attempt. 
+                            # Using `progress.advance()` in main.py accumulates these safely, 
+                            # preventing the progress bar from jumping, resetting, or duplicating.
+                            await progress_queue.put({
+                                'task_id': task_id,
+                                'chunk_index': chunk_index,
+                                'bytes_downloaded': len(chunk)
+                            })
+            return chunk_path
+        except (aiohttp.client_exceptions.ClientPayloadError, asyncio.TimeoutError, aiohttp.client_exceptions.ClientError) as e:
+            retry_count += 1
+            if retry_count >= max_retries:
+                raise Exception(f"Chunk {chunk_index} failed after {max_retries} retries: {e}")
+            await asyncio.sleep(2 ** retry_count)
 
 async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int = 8, progress_queue: asyncio.Queue = None, task_id = None):
     """
@@ -34,7 +62,7 @@ async def download_file(url: str, dest_path: str, headers: dict, num_chunks: int
     if headers is None:
         headers = {}
         
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None)) as session:
         file_size = None
         
         try:
