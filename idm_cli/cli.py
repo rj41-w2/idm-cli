@@ -5,6 +5,8 @@ import time
 import uuid
 import typer
 import signal
+import shlex
+import argparse
 from typing import Optional
 from rich.console import Console
 from rich.progress import (
@@ -112,7 +114,14 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         await listener
 
 @app.command()
-def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to download."), chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file.")):
+def download(
+    url: Optional[str] = typer.Argument(None, help="The YouTube URL to download."),
+    chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file."),
+    quality: Optional[str] = typer.Option(None, "--quality", "-q", help="Video quality (e.g., 720p, 1080p)."),
+    audio_only: bool = typer.Option(False, "--audio-only", "-a", help="Download audio only."),
+    video_only: bool = typer.Option(False, "--video", "-v", help="Download video + audio (bypasses prompt)."),
+    queue: bool = typer.Option(False, "--queue", "-Q", help="Add to queue instead of downloading immediately.")
+):
     """
     Download a YouTube video at maximum speed using parallel chunks.
     """
@@ -126,6 +135,12 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
     show_warning = False
     
     while True:
+        loop_quality = quality
+        loop_audio_only = audio_only
+        loop_video_only = video_only
+        loop_queue = queue
+        loop_chunks = chunks
+
         current_url = url
         if not current_url:
             prompt_str = "idm (Press again ctrl+c to exit) " if show_warning else "idm "
@@ -144,6 +159,34 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         last_ctrl_c_time = 0
         show_warning = False
         found_task_id = None
+
+        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume"]:
+            try:
+                parts = shlex.split(current_url)
+                parser = argparse.ArgumentParser(add_help=False)
+                parser.add_argument('-q', '--quality')
+                parser.add_argument('-a', '--audio-only', action='store_true')
+                parser.add_argument('-v', '--video', action='store_true')
+                parser.add_argument('-Q', '--queue', action='store_true')
+                parser.add_argument('-c', '--chunks', type=int)
+                
+                parsed_args, unknown = parser.parse_known_args(parts)
+                loop_quality = parsed_args.quality or loop_quality
+                loop_audio_only = parsed_args.audio_only or loop_audio_only
+                loop_video_only = parsed_args.video or loop_video_only
+                loop_queue = parsed_args.queue or loop_queue
+                loop_chunks = parsed_args.chunks or loop_chunks
+                
+                urls = [u for u in unknown if not u.startswith('-')]
+                if urls:
+                    current_url = urls[0]
+            except Exception:
+                pass
+
+        fast_mode = not is_interactive or loop_quality or loop_audio_only or loop_video_only or loop_queue
+        if fast_mode and not loop_quality and not loop_audio_only:
+            loop_quality = "720p"
+
         if current_url.strip().lower() == "help":
             console.print("\n[bold cyan]Available Commands:[/bold cyan]")
             console.print("  [bold green]<URL>[/bold green]    - Paste a YouTube URL to download")
@@ -162,6 +205,8 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             queued = {tid: data for tid, data in incomplete.items() if data.get("status") == "queued"}
             if not queued:
                 console.print("[bold green]No videos in queue![/]")
+                if not is_interactive:
+                    raise typer.Exit(code=0)
                 continue
                 
             for tid, data in queued.items():
@@ -195,7 +240,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 warning_state = {"show": False}
                 
                 try:
-                    asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event, warning_state))
+                    asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state))
                     with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
                         if video_dest:
                             mux_audio_video(video_dest, audio_dest, final_dest)
@@ -207,6 +252,8 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                     break
                 except Exception as e:
                     console.print(f"[bold red]Download failed:[/] {e}")
+            if not is_interactive:
+                raise typer.Exit(code=0)
             continue
                 
         if current_url.strip().lower() == "resume":
@@ -293,7 +340,12 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 task_id = str(uuid.uuid4())
                 console.print(f"[bold yellow]Initializing download for:[/] {current_url}\n")
                 
-                dl_type = questionary.select("Download type:", choices=["Video + Audio", "Audio Only"], style=custom_style).ask(kbi_msg="")
+                if loop_audio_only:
+                    dl_type = "Audio Only"
+                elif fast_mode:
+                    dl_type = "Video + Audio"
+                else:
+                    dl_type = questionary.select("Download type:", choices=["Video + Audio", "Audio Only"], style=custom_style).ask(kbi_msg="")
                 if not dl_type:
                     console.print("[bold red]Cancelled by user[/bold red]")
                     if not is_interactive:
@@ -323,13 +375,21 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                     continue
 
                 console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
-                choices = [r['resolution'] for r in resolutions]
-                selected_res = questionary.select("Choose video quality:", choices=choices, style=custom_style).ask(kbi_msg="")
-                if not selected_res:
-                    console.print("[bold red]Cancelled by user[/bold red]")
-                    if not is_interactive:
-                        raise typer.Exit(code=1)
-                    continue
+                
+                if loop_quality:
+                    matched = next((r for r in resolutions if r['resolution'] == loop_quality), None)
+                    if matched:
+                        selected_res = matched['resolution']
+                    else:
+                        selected_res = resolutions[0]['resolution']
+                else:
+                    choices = [r['resolution'] for r in resolutions]
+                    selected_res = questionary.select("Choose video quality:", choices=choices, style=custom_style).ask(kbi_msg="")
+                    if not selected_res:
+                        console.print("[bold red]Cancelled by user[/bold red]")
+                        if not is_interactive:
+                            raise typer.Exit(code=1)
+                        continue
 
                 selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
                 format_id = selected_format['format_id']
@@ -344,13 +404,20 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 audio_dest = f"{safe_title}_audio.m4a"
                 final_dest = f"{safe_title}.mp4"
 
-            action = questionary.select("Action:", choices=["Download Now", "Add to Queue"], style=custom_style).ask(kbi_msg="")
+            if loop_queue:
+                action = "Add to Queue"
+            elif fast_mode:
+                action = "Download Now"
+            else:
+                action = questionary.select("Action:", choices=["Download Now", "Add to Queue"], style=custom_style).ask(kbi_msg="")
             if not action:
                 console.print("[bold red]Cancelled by user[/bold red]")
                 continue
             if action == "Add to Queue":
                 save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="queued")
                 console.print("[bold green]Added to queue![/]")
+                if not is_interactive:
+                    raise typer.Exit(code=0)
                 continue
 
         with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
@@ -368,7 +435,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         # Save state before downloading
         save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="interrupted")
         
-        console.print(f"[bold green]✓[/] Using {chunks} chunks per file.")
+        console.print(f"[bold green]✓[/] Using {loop_chunks} chunks per file.")
         console.print("[bold cyan]Starting parallel downloads... (Press 'p' to pause, 'r' to resume)[/]\n")
 
         pause_event = asyncio.Event()
@@ -390,7 +457,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         signal.signal(signal.SIGINT, custom_handler)
 
         try:
-            asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event, warning_state))
+            asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state))
         except KeyboardInterrupt:
             console.print("\n[bold red]Download cancelled by user. Progress saved to resume later.[/bold red]")
             continue
@@ -421,7 +488,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
         
         if not is_interactive:
-            break
+            raise typer.Exit(code=0)
         url = None
 
 if __name__ == "__main__":
