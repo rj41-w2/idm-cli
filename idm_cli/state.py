@@ -37,7 +37,7 @@ def _write_state(state: dict):
             os.remove(temp_path)
         raise
 
-def save_download(task_id: str, url: str, format_id: str, title: str, video_dest: str, audio_dest: str, final_dest: str):
+def save_download(task_id: str, url: str, format_id: str, title: str, video_dest: str, audio_dest: str, final_dest: str, status: str = "interrupted"):
     """Adds or updates a download in the JSON."""
     state = get_incomplete_downloads()
     state[task_id] = {
@@ -46,7 +46,8 @@ def save_download(task_id: str, url: str, format_id: str, title: str, video_dest
         "title": title,
         "video_dest": video_dest,
         "audio_dest": audio_dest,
-        "final_dest": final_dest
+        "final_dest": final_dest,
+        "status": status
     }
     _write_state(state)
 

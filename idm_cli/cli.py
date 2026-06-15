@@ -143,6 +143,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             console.print("\n[bold cyan]Available Commands:[/bold cyan]")
             console.print("  [bold green]<URL>[/bold green]    - Paste a YouTube URL to download")
             console.print("  [bold green]resume[/bold green] - Resume or delete an incomplete download")
+            console.print("  [bold green]start queue[/bold green] - Start downloading queued videos")
             console.print("  [bold green]help[/bold green]   - Show this help menu")
             console.print("  [bold green]exit[/bold green]   - Exit the application\n")
             continue
@@ -150,6 +151,55 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
         if current_url.strip().lower() == "exit":
             console.print("[bold green]Goodbye![/bold green]")
             raise typer.Exit()
+
+        if current_url.strip().lower() in ["start queue", "queue start"]:
+            incomplete = get_incomplete_downloads()
+            queued = {tid: data for tid, data in incomplete.items() if data.get("status") == "queued"}
+            if not queued:
+                console.print("[bold green]No videos in queue![/]")
+                continue
+                
+            for tid, data in queued.items():
+                console.print(f"[bold yellow]Starting queued download:[/] {data['title']}\n")
+                url_to_extract = data['url']
+                format_id = data['format_id']
+                video_dest = data['video_dest']
+                audio_dest = data['audio_dest']
+                final_dest = data['final_dest']
+                title = data['title']
+                
+                with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
+                    try:
+                        info = fetch_all_info(url_to_extract)
+                    except Exception as e:
+                        console.print(f"[bold red]Error fetching info:[/] {e}")
+                        continue
+                
+                with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
+                    try:
+                        extracted = extract_urls(info, format_id)
+                        video_url = extracted.get("video_url")
+                        audio_url = extracted.get("audio_url")
+                        headers = extracted.get("headers", {})
+                    except Exception as e:
+                        console.print(f"[bold red]Error extracting URLs:[/] {e}")
+                        continue
+
+                pause_event = asyncio.Event()
+                pause_event.set()
+                warning_state = {"show": False}
+                
+                try:
+                    asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event, warning_state))
+                    with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
+                        mux_audio_video(video_dest, audio_dest, final_dest)
+                    remove_download(tid)
+                    console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
+                except KeyboardInterrupt:
+                    break
+                except Exception as e:
+                    console.print(f"[bold red]Download failed:[/] {e}")
+            continue
                 
         if current_url.strip().lower() == "resume":
             incomplete = get_incomplete_downloads()
@@ -246,6 +296,15 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
             audio_dest = f"{safe_title}_audio.m4a"
             final_dest = f"{safe_title}.mp4"
 
+            action = questionary.select("Action:", choices=["Download Now", "Add to Queue"], style=custom_style).ask(kbi_msg="")
+            if not action:
+                console.print("[bold red]Cancelled by user[/bold red]")
+                continue
+            if action == "Add to Queue":
+                save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="queued")
+                console.print("[bold green]Added to queue![/]")
+                continue
+
         with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
             try:
                 extracted = extract_urls(info, format_id)
@@ -259,7 +318,7 @@ def download(url: Optional[str] = typer.Argument(None, help="The YouTube URL to 
                 continue
 
         # Save state before downloading
-        save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest)
+        save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="interrupted")
         
         console.print(f"[bold green]✓[/] Using {chunks} chunks per file.")
         console.print("[bold cyan]Starting parallel downloads... (Press 'p' to pause, 'r' to resume)[/]\n")
