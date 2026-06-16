@@ -406,14 +406,20 @@ def download(
                 format_id = selected_format['format_id']
             
             safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()[:60].strip()
+            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            os.makedirs(downloads_dir, exist_ok=True)
+            
+            tmp_dir = os.path.expanduser("~/.idm_cli/tmp")
+            os.makedirs(tmp_dir, exist_ok=True)
+            
             if format_id == "audio_only":
                 video_dest = ""
-                audio_dest = f"{safe_title}_audio.m4a"
-                final_dest = f"{safe_title}.mp3"
+                audio_dest = os.path.join(tmp_dir, f"{safe_title}_audio.m4a")
+                final_dest = os.path.join(downloads_dir, f"{safe_title}.mp3")
             else:
-                video_dest = f"{safe_title}_video.mp4"
-                audio_dest = f"{safe_title}_audio.m4a"
-                final_dest = f"{safe_title}.mp4"
+                video_dest = os.path.join(tmp_dir, f"{safe_title}_video.mp4")
+                audio_dest = os.path.join(tmp_dir, f"{safe_title}_audio.m4a")
+                final_dest = os.path.join(downloads_dir, f"{safe_title}.mp4")
 
             if loop_queue:
                 action = "Add to Queue"
