@@ -24,7 +24,7 @@ A lightning-fast, powerful, and universal command-line download manager written 
 Clone the repository and install the required dependencies:
 
 ```bash
-git clone https://github.com/yourusername/IDM-CLI.git
+git clone https://github.com/rj41-w2/idm-cli.git
 cd IDM-CLI
 pip install -r requirements.txt
 ```
