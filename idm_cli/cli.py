@@ -32,6 +32,7 @@ from idm_cli.extractors import get_extractor
 from idm_cli.downloader import download_file
 from idm_cli.muxer import mux_audio_video, convert_to_mp3
 from idm_cli.state import save_download, remove_download, get_incomplete_downloads
+from idm_cli.update_checker import check_for_updates
 
 custom_style = questionary.Style([
     ('qmark', 'fg:cyan bold'),       
@@ -144,6 +145,11 @@ def download(
     console.print("[bold cyan]--- The Ultimate High-Speed CLI Downloader ---[/bold cyan]")
     console.print("Type 'help' for available commands\n", style="white")
     
+    try:
+        check_for_updates()
+    except Exception:
+        pass
+
     is_interactive = (url is None)
     last_ctrl_c_time = 0
     show_warning = False

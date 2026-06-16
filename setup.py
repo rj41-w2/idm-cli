@@ -1,5 +1,14 @@
 from setuptools import setup, find_packages
 import os
+import re
+
+def get_version():
+    init_py_path = os.path.join(os.path.dirname(__file__), "idm_cli", "__init__.py")
+    with open(init_py_path, "r", encoding="utf-8") as f:
+        version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", f.read(), re.M)
+        if version_match:
+            return version_match.group(1)
+        raise RuntimeError("Unable to find version string.")
 
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
@@ -10,7 +19,7 @@ with open(os.path.join(os.path.dirname(__file__), "README.md"), encoding="utf-8"
 
 setup(
     name="idm-cli",
-    version="0.0.1",
+    version=get_version(),
     author="Rehan",
     author_email="rehanjamilwattoo@gmail.com",
     description="A lightning-fast, universal command-line download manager",
