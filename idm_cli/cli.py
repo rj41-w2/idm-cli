@@ -405,14 +405,18 @@ def download(
                 selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
                 format_id = selected_format['format_id']
             
-            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_']).rstrip()[:60].strip()
+            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_.']).rstrip()[:60].strip()
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
             os.makedirs(downloads_dir, exist_ok=True)
             
             tmp_dir = os.path.expanduser("~/.idm_cli/tmp")
             os.makedirs(tmp_dir, exist_ok=True)
             
-            if format_id == "audio_only":
+            if format_id == "direct_file":
+                video_dest = os.path.join(tmp_dir, safe_title)
+                audio_dest = ""
+                final_dest = os.path.join(downloads_dir, safe_title)
+            elif format_id == "audio_only":
                 video_dest = ""
                 audio_dest = os.path.join(tmp_dir, f"{safe_title}_audio.m4a")
                 final_dest = os.path.join(downloads_dir, f"{safe_title}.mp3")
