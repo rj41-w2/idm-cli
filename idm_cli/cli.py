@@ -227,6 +227,7 @@ def download(
                 console.print("[bold green]No videos in queue![/]")
                 if not is_interactive:
                     raise typer.Exit(code=0)
+                current_url = None
                 continue
                 
             for tid, data in queued.items():
@@ -281,6 +282,7 @@ def download(
                     console.print(f"[bold red]Download failed:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=0)
+            current_url = None
             continue
                 
         if current_url.strip().lower() == "resume":
@@ -375,6 +377,14 @@ def download(
                 extractor = get_extractor(url_to_extract)
                 info = extractor.fetch_all_info(url_to_extract)
                 title = info.get("title", "download") if not found_task_id else title
+                
+                if info.get("_type") == "playlist":
+                    console.print("\n[bold yellow]Currently, the feature to download album/playlist photos or videos is not added.[/]")
+                    current_url = None
+                    if not is_interactive:
+                        raise typer.Exit(code=0)
+                    continue
+
                 if not found_task_id and format_id != "audio_only":
                     resolutions = extractor.get_video_resolutions(info)
             except Exception as e:
