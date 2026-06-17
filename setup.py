@@ -21,7 +21,6 @@ setup(
     name="idm-cli",
     version=get_version(),
     author="Rehan",
-    author_email="rehanjamilwattoo@gmail.com",
     description="A lightning-fast, universal command-line download manager",
     long_description=long_description,
     long_description_content_type="text/markdown",
