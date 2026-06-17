@@ -210,11 +210,7 @@ def download(
         if not current_url:
             prompt_str = "idm (Press again ctrl+c to exit) " if show_warning else "idm "
             try:
-                current_url = questionary.autocomplete(
-                    prompt_str, 
-                    choices=["help", "exit", "start queue", "queue start", "resume"],
-                    style=custom_style
-                ).ask(kbi_msg="")
+                current_url = questionary.text(prompt_str, style=custom_style, lexer=IDMLexer()).ask(kbi_msg="")
             except KeyboardInterrupt:
                 current_url = None
 
