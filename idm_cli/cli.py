@@ -96,7 +96,7 @@ async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_even
             
         queue.task_done()
 
-async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event, warning_state: dict = None):
+async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event, warning_state: dict = None, media_type: str = "Video"):
     queue = asyncio.Queue()
 
     with Progress(
@@ -109,7 +109,7 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         TimeRemainingColumn(),
         console=console
     ) as progress:
-        video_task_id = progress.add_task("[cyan]Video", total=None) if video_url else None
+        video_task_id = progress.add_task(f"[cyan]{media_type}", total=None) if video_url else None
         audio_task_id = progress.add_task("[magenta]Audio", total=None) if audio_url else None
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
@@ -143,7 +143,7 @@ def download(
     banner = pyfiglet.figlet_format("IDM  CLI")
     console.print(f"[bold green]{banner}[/bold green]")
     console.print("[bold cyan]--- The Ultimate High-Speed CLI Downloader ---[/bold cyan]")
-    console.print("Type 'help' for available commands\n", style="white")
+    console.print("      Type 'help' for available commands\n", style="white")
     
     try:
         check_for_updates()
@@ -208,12 +208,19 @@ def download(
             loop_quality = "720p"
 
         if current_url.strip().lower() == "help":
-            console.print("\n[bold cyan]Available Commands:[/bold cyan]")
-            console.print("  [bold green]<URL>[/bold green]    - Paste a YouTube URL to download")
-            console.print("  [bold green]resume[/bold green] - Resume or delete an incomplete download")
-            console.print("  [bold green]start queue[/bold green] - Start downloading queued videos")
-            console.print("  [bold green]help[/bold green]   - Show this help menu")
-            console.print("  [bold green]exit[/bold green]   - Exit the application\n")
+            console.print("\n[bold cyan] Available Commands:[/bold cyan]")
+            console.print("  [bold green]<URL>[/bold green]         - Paste any Video/File URL to download")
+            console.print("  [bold green]resume[/bold green]      - Resume or delete an incomplete download")
+            console.print("  [bold green]start queue[/bold green] - Start downloading queued files")
+            console.print("  [bold green]help[/bold green]        - Show this help menu")
+            console.print("  [bold green]exit[/bold green]        - Exit the application")
+            
+            console.print("\n[bold magenta]Fast Mode Flags (Skip Prompts):[/bold magenta]")
+            console.print("  [bold white]-q <res>[/bold white]    - Set quality (e.g., -q 1080p, -q 720p)")
+            console.print("  [bold white]-a[/bold white]          - Audio Only (Convert to MP3)")
+            console.print("  [bold white]-Q[/bold white]          - Add directly to Queue instead of downloading")
+            console.print("  [bold white]-c <num>[/bold white]    - Set number of parallel chunks (default: 8)")
+            console.print("\n  [dim italic]Example: https://youtube.com/... -q 1080p -Q[/dim italic]\n")
             continue
             
         if current_url.strip().lower() == "exit":
@@ -247,6 +254,14 @@ def download(
                         console.print(f"[bold red]Error fetching info:[/] {e}")
                         continue
                 
+                if format_id == "direct_file":
+                    ext = os.path.splitext(final_dest)[1].replace(".", "").upper()
+                    media_type = f"{ext} File" if ext else "File"
+                elif format_id == "audio_only":
+                    media_type = "Audio"
+                else:
+                    media_type = "Video"
+                    
                 with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
                     try:
                         extractor = get_extractor(url_to_extract)
@@ -265,7 +280,7 @@ def download(
                 warning_state = {"show": False}
                 
                 try:
-                    asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state))
+                    asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
                     with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
                         if video_dest and audio_dest:
                             mux_audio_video(video_dest, audio_dest, final_dest)
@@ -275,7 +290,7 @@ def download(
                             import shutil
                             shutil.move(video_dest, final_dest)
                     remove_download(tid)
-                    console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
+                    console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
                 except KeyboardInterrupt:
                     break
                 except Exception as e:
@@ -401,9 +416,9 @@ def download(
                         raise typer.Exit(code=1)
                     continue
 
-                console.print(f"[bold green]✓[/] Fetched info for: [bold white]{title}[/]")
+                console.print(f"[bold green]*[/] Fetched info for: [bold white]{title}[/]")
                 
-                if loop_quality:
+                if loop_quality or len(resolutions) == 1:
                     matched = next((r for r in resolutions if r['resolution'] == loop_quality), None)
                     if matched:
                         selected_res = matched['resolution']
@@ -411,7 +426,8 @@ def download(
                         selected_res = resolutions[0]['resolution']
                 else:
                     choices = [r['resolution'] for r in resolutions]
-                    selected_res = questionary.select("Choose video quality:", choices=choices, style=custom_style).ask(kbi_msg="")
+                    prompt_text = "Choose video quality:" if format_id != "direct_file" else "Choose download option:"
+                    selected_res = questionary.select(prompt_text, choices=choices, style=custom_style).ask(kbi_msg="")
                     if not selected_res:
                         console.print("[bold red]Cancelled by user[/bold red]")
                         if not is_interactive:
@@ -442,20 +458,20 @@ def download(
                 final_dest = os.path.join(downloads_dir, f"{safe_title}.mp4")
 
             if loop_queue:
-                action = "Add to Queue"
-            elif fast_mode:
-                action = "Download Now"
-            else:
-                action = questionary.select("Action:", choices=["Download Now", "Add to Queue"], style=custom_style).ask(kbi_msg="")
-            if not action:
-                console.print("[bold red]Cancelled by user[/bold red]")
-                continue
-            if action == "Add to Queue":
                 save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="queued")
                 console.print("[bold green]Added to queue![/]")
                 if not is_interactive:
                     raise typer.Exit(code=0)
                 continue
+
+        if format_id == "direct_file":
+            ext = os.path.splitext(final_dest)[1].replace(".", "").upper()
+            media_type = f"{ext} File" if ext else "File"
+        elif format_id == "audio_only":
+            media_type = "Audio"
+        else:
+            media_type = "Video"
+
 
         with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
             try:
@@ -475,7 +491,7 @@ def download(
         # Save state before downloading
         save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="interrupted")
         
-        console.print(f"[bold green]✓[/] Using {loop_chunks} chunks per file.")
+        console.print(f"[bold green]*[/] Using {loop_chunks} chunks per file.")
         console.print("[bold cyan]Starting parallel downloads... (Press 'p' to pause, 'r' to resume)[/]\n")
 
         pause_event = asyncio.Event()
@@ -497,7 +513,7 @@ def download(
         signal.signal(signal.SIGINT, custom_handler)
 
         try:
-            asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state))
+            asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
         except KeyboardInterrupt:
             console.print("\n[bold red]Download cancelled by user. Progress saved to resume later.[/bold red]")
             continue
@@ -528,7 +544,7 @@ def download(
                 continue
 
         remove_download(task_id)
-        console.print(f"\n[bold green]🎉 Success! Video saved as:[/] [bold white]{final_dest}[/]")
+        console.print(f"\n[bold green] Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
         
         if not is_interactive:
             raise typer.Exit(code=0)
