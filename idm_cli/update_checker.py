@@ -55,16 +55,8 @@ def check_for_updates():
         console = Console()
         console.print(f"\n[bold yellow]A new version of IDM-CLI ({latest_version}) is available![/bold yellow]")
         
-        # Prompt user
-        answer = questionary.confirm(
-            "A new version is available! Would you like to update now?", 
-            default=True
-        ).ask(kbi_msg="")
-
-        if answer:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "idm-cli"])
-            print("Update successful! Please restart IDM-CLI.")
-            sys.exit(0)
+        console.print("\n[bold cyan]Please close this app and run the following command in your terminal to update:[/bold cyan]")
+        console.print("  [bold green]pip install --upgrade idm-cli[/bold green]\n")
 
     # Finally, write the current time.time() to last_check.json
     try:

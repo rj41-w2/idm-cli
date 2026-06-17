@@ -33,6 +33,48 @@ from idm_cli.downloader import download_file
 from idm_cli.muxer import mux_audio_video, convert_to_mp3
 from idm_cli.state import save_download, remove_download, get_incomplete_downloads
 from idm_cli.update_checker import check_for_updates
+from idm_cli import __version__
+import json
+
+CHANGELOG = {
+    "1.1.4": [
+        "Fixed auto-update file lock issue on Windows.",
+        "Removed all emojis for a cleaner, classic terminal look.",
+        "Improved UI text to adapt dynamically to downloaded file types (PDF, EXE, Video).",
+        "Removed the 'Add to Queue' prompt for faster downloads (use -Q flag to queue)."
+    ],
+    "1.1.3": [
+        "Added Instagram format extraction support.",
+        "Disabled Instagram playlist/carousel downloads due to API limits."
+    ]
+}
+
+def check_first_run():
+    config_dir = os.path.expanduser("~/.idm_cli")
+    os.makedirs(config_dir, exist_ok=True)
+    config_file = os.path.join(config_dir, "config.json")
+    
+    last_version = "0.0.0"
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                last_version = json.load(f).get("last_version", "0.0.0")
+        except Exception:
+            pass
+
+    if __version__ != last_version:
+        if __version__ in CHANGELOG:
+            console.print(f"\n[bold magenta]*** What's New in v{__version__} ***[/bold magenta]")
+            for change in CHANGELOG[__version__]:
+                console.print(f"  [cyan]*[/cyan] {change}")
+            console.print()
+        
+        try:
+            with open(config_file, "w") as f:
+                json.dump({"last_version": __version__}, f)
+        except Exception:
+            pass
+
 
 custom_style = questionary.Style([
     ('qmark', 'fg:cyan bold'),       
@@ -142,8 +184,10 @@ def download(
     """
     banner = pyfiglet.figlet_format("IDM  CLI")
     console.print(f"[bold green]{banner}[/bold green]")
-    console.print("[bold cyan]--- The Ultimate High-Speed CLI Downloader ---[/bold cyan]")
+    console.print(f"[bold cyan]--- The Ultimate High-Speed CLI Downloader (v{__version__}) ---[/bold cyan]")
     console.print("      Type 'help' for available commands\n", style="white")
+    
+    check_first_run()
     
     try:
         check_for_updates()
@@ -155,6 +199,7 @@ def download(
     show_warning = False
     
     while True:
+        found_task_id = None
         loop_quality = quality
         loop_audio_only = audio_only
         loop_video_only = video_only
@@ -164,20 +209,29 @@ def download(
         current_url = url
         if not current_url:
             prompt_str = "idm (Press again ctrl+c to exit) " if show_warning else "idm "
-            current_url = questionary.text(prompt_str, style=custom_style, lexer=IDMLexer()).ask(kbi_msg="")
+            try:
+                current_url = questionary.autocomplete(
+                    prompt_str, 
+                    choices=["help", "exit", "start queue", "queue start", "resume"],
+                    style=custom_style
+                ).ask(kbi_msg="")
+            except KeyboardInterrupt:
+                current_url = None
+
             if current_url is None:
                 if time.time() - last_ctrl_c_time <= 5:
                     console.print("[bold red]Cancelled by user[/bold red]")
                     raise typer.Exit()
-                else:
-                    last_ctrl_c_time = time.time()
-                    show_warning = True
-                    continue
-            elif not current_url.strip():
+                last_ctrl_c_time = time.time()
+                show_warning = True
+                continue
+            else:
+                show_warning = False
+
+            current_url = current_url.strip()
+            if not current_url:
                 continue
         
-        last_ctrl_c_time = 0
-        show_warning = False
         found_task_id = None
 
         if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume"]:
