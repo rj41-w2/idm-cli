@@ -5,3 +5,5 @@ aiofiles
 yt-dlp
 pyfiglet
 questionary
+aiodns
+Brotli

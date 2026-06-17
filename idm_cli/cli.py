@@ -35,17 +35,14 @@ from idm_cli.state import save_download, remove_download, get_incomplete_downloa
 from idm_cli.update_checker import check_for_updates
 from idm_cli import __version__
 import json
+import aiohttp
 
 CHANGELOG = {
-    "1.1.4": [
-        "Fixed auto-update file lock issue on Windows.",
-        "Removed all emojis for a cleaner, classic terminal look.",
-        "Improved UI text to adapt dynamically to downloaded file types (PDF, EXE, Video).",
-        "Removed the 'Add to Queue' prompt for faster downloads (use -Q flag to queue)."
-    ],
-    "1.1.3": [
-        "Added Instagram format extraction support.",
-        "Disabled Instagram playlist/carousel downloads due to API limits."
+    "1.1.6": [
+        "Replaced autocomplete with text prompt for improved user input handling.",
+        "Enhanced update prompt for better user experience.",
+        "Enhanced download_media function to accept media_type parameter and improved console output.",
+        "Enhanced video info extraction for Facebook and Instagram, and improved error handling for FFmpeg in muxer."
     ]
 }
 
@@ -156,16 +153,17 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
-        v_task = asyncio.create_task(download_file(video_url, video_dest, headers, chunks, queue, video_task_id, pause_event)) if video_url else None
-        a_task = asyncio.create_task(download_file(audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
-
-        tasks_to_gather = []
-        if a_task:
-            tasks_to_gather.append(a_task)
-        if v_task:
-            tasks_to_gather.append(v_task)
-
-        await asyncio.gather(*tasks_to_gather)
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None)) as session:
+            v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_id, pause_event)) if video_url else None
+            a_task = asyncio.create_task(download_file(session, audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
+    
+            tasks_to_gather = []
+            if a_task:
+                tasks_to_gather.append(a_task)
+            if v_task:
+                tasks_to_gather.append(v_task)
+    
+            await asyncio.gather(*tasks_to_gather)
 
         await queue.put(None)
         await listener
@@ -184,7 +182,7 @@ def download(
     """
     banner = pyfiglet.figlet_format("IDM  CLI")
     console.print(f"[bold green]{banner}[/bold green]")
-    console.print(f"[bold cyan]--- The Ultimate High-Speed CLI Downloader (v{__version__}) ---[/bold cyan]")
+    console.print(f"[bold cyan]--- The Ultimate High-Speed CLI Downloader --- [/bold cyan][dim cyan](v{__version__})[/dim cyan]")
     console.print("      Type 'help' for available commands\n", style="white")
     
     check_first_run()
