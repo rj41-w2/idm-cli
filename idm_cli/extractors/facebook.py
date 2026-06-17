@@ -10,7 +10,14 @@ def fetch_all_info(url: str) -> dict:
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        return info
+        
+    desc = info.get("description")
+    if desc and desc.strip():
+        clean_desc = desc.strip().split('\n')[0]
+        if clean_desc:
+            info["title"] = clean_desc
+            
+    return info
 
 def get_video_resolutions(info: dict) -> list[dict]:
     """

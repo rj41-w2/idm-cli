@@ -38,6 +38,8 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
     except subprocess.CalledProcessError as e:
         logger.error(f"FFmpeg muxing failed: {e.stderr.decode('utf-8', errors='replace')}")
         raise RuntimeError(f"FFmpeg muxing failed: {e}")
+    except FileNotFoundError:
+        raise RuntimeError("FFmpeg is not installed! Please run 'winget install ffmpeg' in your terminal to install it, then restart the app.")
 
 def convert_to_mp3(audio_path: str, output_path: str) -> None:
     """
@@ -69,3 +71,5 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
     except subprocess.CalledProcessError as e:
         logger.error(f"FFmpeg conversion failed: {e.stderr.decode('utf-8', errors='replace')}")
         raise RuntimeError(f"FFmpeg conversion failed: {e}")
+    except FileNotFoundError:
+        raise RuntimeError("FFmpeg is not installed! Please run 'winget install ffmpeg' in your terminal to install it, then restart the app.")

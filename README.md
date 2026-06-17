@@ -18,7 +18,8 @@ A lightning-fast, powerful, and universal command-line download manager written 
 ## 🛠️ Prerequisites
 
 - **Python 3.8+**
-- **FFmpeg:** Required for muxing video and audio streams, and converting media to `.mp3`. Ensure `ffmpeg` is installed and added to your system's PATH.
+- **FFmpeg:** Required for muxing video and audio streams, and converting media to `.mp3`. Ensure `ffmpeg` is installed and added to your system's PATH. 
+  - *Windows users can easily install it by running: `winget install ffmpeg` in their terminal.*
 
 ## 📦 Installation
 
