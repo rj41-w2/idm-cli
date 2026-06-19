@@ -1,0 +1,9 @@
+{
+    "name": "com.idm.cli",
+    "description": "IDM CLI Native Host",
+    "path": "C:\\Users\\rehan\\Projects\\IDM-CLI\\native_host.bat",
+    "type": "stdio",
+    "allowed_origins": [
+        "chrome-extension://blkkdogkeloaphaioggojjficpleeckb/"
+    ]
+}
