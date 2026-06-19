@@ -296,6 +296,18 @@ def download(
                 console.print(f"[bold red]Failed to copy extension files:[/] {e}")
                 continue
                 
+            manifest_path = os.path.join(base_dir, 'com.idm.cli.json')
+            existing_ext_id = None
+            if os.path.exists(manifest_path):
+                try:
+                    with open(manifest_path, 'r') as f:
+                        old_manifest = json.load(f)
+                        origin = old_manifest.get("allowed_origins", [""])[0]
+                        if origin.startswith("chrome-extension://"):
+                            existing_ext_id = origin.split("://")[1].strip("/")
+                except Exception:
+                    pass
+                    
             console.print("\n[bold yellow]--- How to Install IDM-CLI Extension ---[/bold yellow]")
             console.print("[cyan]The browser extension allows you to download files and videos directly via IDM-CLI![/cyan]\n")
             console.print(f"Extension Folder: [bold green]{dest_ext_path}[/bold green]\n")
@@ -304,9 +316,20 @@ def download(
             console.print("3. Click [bold]'Load unpacked'[/bold] and select the Extension Folder shown above.")
             console.print("4. Copy the Extension ID that is generated.\n")
             
-            ext_id = questionary.text("Paste the Extension ID here (or press Enter to cancel):", style=custom_style).ask()
+            if existing_ext_id:
+                console.print(f"[bold cyan]You have already configured this Extension ID: {existing_ext_id}[/bold cyan]")
+                console.print("[bold yellow]Update Note:[/bold yellow] The extension files on your disk have been updated to the latest version.")
+                console.print("To apply the update in your browser, go to [bold]chrome://extensions[/bold] and click the [bold]'Reload'[/bold] icon (↻) on the IDM-CLI extension card.\n")
+                prompt_text = "If you want to change the ID, paste the new ID here, otherwise just press enter:"
+            else:
+                prompt_text = "Paste the Extension ID here (or press enter):"
+                
+            ext_id = questionary.text(prompt_text, style=custom_style).ask()
             if not ext_id:
-                console.print("[bold red]Installation Cancelled.[/bold red]\n")
+                if existing_ext_id:
+                    console.print("[bold green]Keeping existing extension ID.[/bold green]\n")
+                else:
+                    console.print("[bold red]Installation Cancelled.[/bold red]\n")
                 continue
                 
             ext_id = ext_id.strip()
@@ -341,7 +364,7 @@ def download(
                 winreg.CloseKey(edge_key)
                 
                 console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")
-                console.print("[dim]You can now right-click any video or file link and click 'Download with IDM-CLI', or IDM-CLI will automatically catch file downloads![/dim]\n")
+                console.print("[dim]You can now catch any link through the extension![/dim]\n")
             except Exception as e:
                 console.print(f"\n[bold red]Failed to write to registry:[/] {e}\n")
             continue
