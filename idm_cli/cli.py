@@ -175,7 +175,8 @@ def download(
     quality: Optional[str] = typer.Option(None, "--quality", "-q", help="Video quality (e.g., 720p, 1080p)."),
     audio_only: bool = typer.Option(False, "--audio-only", "-a", help="Download audio only."),
     video_only: bool = typer.Option(False, "--video", "-v", help="Download video + audio (bypasses prompt)."),
-    queue: bool = typer.Option(False, "--queue", "-Q", help="Add to queue instead of downloading immediately.")
+    queue: bool = typer.Option(False, "--queue", "-Q", help="Add to queue instead of downloading immediately."),
+    filename_opt: Optional[str] = typer.Option(None, "--filename", "-f", help="Force output filename.")
 ):
     """
     Download a YouTube video at maximum speed using parallel chunks.
@@ -203,6 +204,7 @@ def download(
         loop_video_only = video_only
         loop_queue = queue
         loop_chunks = chunks
+        loop_filename = filename_opt
 
         current_url = url
         if not current_url:
@@ -228,7 +230,7 @@ def download(
         
         found_task_id = None
 
-        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume"]:
+        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume", "install extension"]:
             try:
                 parts = shlex.split(current_url)
                 parser = argparse.ArgumentParser(add_help=False)
@@ -237,6 +239,7 @@ def download(
                 parser.add_argument('-v', '--video', action='store_true')
                 parser.add_argument('-Q', '--queue', action='store_true')
                 parser.add_argument('-c', '--chunks', type=int)
+                parser.add_argument('-f', '--filename', type=str)
                 
                 parsed_args, unknown = parser.parse_known_args(parts)
                 loop_quality = parsed_args.quality or loop_quality
@@ -244,6 +247,7 @@ def download(
                 loop_video_only = parsed_args.video or loop_video_only
                 loop_queue = parsed_args.queue or loop_queue
                 loop_chunks = parsed_args.chunks or loop_chunks
+                loop_filename = parsed_args.filename or loop_filename
                 
                 urls = [u for u in unknown if not u.startswith('-')]
                 if urls:
@@ -260,6 +264,7 @@ def download(
             console.print("  [bold green]<URL>[/bold green]         - Paste any Video/File URL to download")
             console.print("  [bold green]resume[/bold green]      - Resume or delete an incomplete download")
             console.print("  [bold green]start queue[/bold green] - Start downloading queued files")
+            console.print("  [bold green]install extension[/bold green] - Guide to install Chrome/Edge extension")
             console.print("  [bold green]help[/bold green]        - Show this help menu")
             console.print("  [bold green]exit[/bold green]        - Exit the application")
             
@@ -269,6 +274,20 @@ def download(
             console.print("  [bold white]-Q[/bold white]          - Add directly to Queue instead of downloading")
             console.print("  [bold white]-c <num>[/bold white]    - Set number of parallel chunks (default: 8)")
             console.print("\n  [dim italic]Example: https://youtube.com/... -q 1080p -Q[/dim italic]\n")
+            continue
+            
+        if current_url.strip().lower() == "install extension":
+            import os
+            ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'browser_extension'))
+            console.print("\n[bold yellow]--- How to Install IDM-CLI Extension ---[/bold yellow]")
+            console.print("[cyan]The browser extension allows you to download files and videos directly via IDM-CLI![/cyan]\n")
+            console.print(f"Extension Source Folder: [bold green]{ext_path}[/bold green]\n")
+            console.print("1. Open Chrome or Edge and go to [bold]chrome://extensions[/bold] or [bold]edge://extensions[/bold]")
+            console.print("2. Turn on [bold]'Developer mode'[/bold] (usually in the top right corner).")
+            console.print("3. Click [bold]'Load unpacked'[/bold] and select the Folder path shown above.")
+            console.print("4. Copy the Extension ID that is generated.")
+            console.print("5. Open a terminal, go to the IDM-CLI folder, and run: [bold green]python install_extension.py[/bold green]")
+            console.print("6. Paste the Extension ID when prompted. Done!\n")
             continue
             
         if current_url.strip().lower() == "exit":
@@ -453,6 +472,8 @@ def download(
                 extractor = get_extractor(url_to_extract)
                 info = extractor.fetch_all_info(url_to_extract)
                 title = info.get("title", "download") if not found_task_id else title
+                if loop_filename and not found_task_id:
+                    title = os.path.basename(loop_filename)
                 
                 if info.get("_type") == "playlist":
                     console.print("\n[bold yellow]Currently, the feature to download album/playlist photos or videos is not added.[/]")

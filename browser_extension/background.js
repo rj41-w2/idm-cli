@@ -6,12 +6,21 @@ chrome.downloads.onDeterminingFilename.addListener((downloadItem, suggest) => {
     }
 
     const filename = (downloadItem.filename || "").toLowerCase();
-    const isMatch = INTERCEPT_EXTENSIONS.some(ext => filename.endsWith('.' + ext));
+    let urlPath = "";
+    try {
+        urlPath = new URL(downloadItem.url).pathname.toLowerCase();
+    } catch(e) {}
+
+    const isMatch = INTERCEPT_EXTENSIONS.some(ext => filename.endsWith('.' + ext) || urlPath.endsWith('.' + ext));
 
     if (isMatch) {
         chrome.downloads.cancel(downloadItem.id, () => {
-            chrome.downloads.erase({id: downloadItem.id});
-            chrome.runtime.sendNativeMessage('com.idm.cli', { action: "download", url: downloadItem.finalUrl || downloadItem.url });
+            let err = chrome.runtime.lastError; // Check silently to avoid unchecked error
+            chrome.runtime.sendNativeMessage('com.idm.cli', { 
+                action: "download", 
+                url: downloadItem.finalUrl || downloadItem.url, 
+                filename: downloadItem.filename 
+            });
         });
     }
 });

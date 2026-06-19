@@ -41,9 +41,12 @@ def main():
 
             elif action == "download":
                 quality = message.get("quality")
+                filename_opt = message.get("filename")
                 cmd = [sys.executable, '-m', 'idm_cli.cli', url, '-Q']
                 if quality:
                     cmd.extend(['-q', quality])
+                if filename_opt:
+                    cmd.extend(['-f', filename_opt])
                 
                 # Run synchronously to add to queue. Catch output to protect Native Messaging protocol.
                 import os
