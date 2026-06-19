@@ -7,3 +7,4 @@ pyfiglet
 questionary
 aiodns
 Brotli
+psutil

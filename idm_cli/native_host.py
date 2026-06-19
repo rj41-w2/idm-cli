@@ -41,10 +41,26 @@ def main():
 
             elif action == "download":
                 quality = message.get("quality")
-                cmd = ['cmd.exe', '/c', 'start', 'idm', url]
+                cmd = [sys.executable, '-m', 'idm_cli.cli', url, '-Q']
                 if quality:
                     cmd.extend(['-q', quality])
-                subprocess.Popen(cmd)
+                
+                # Run synchronously to add to queue. Catch output to protect Native Messaging protocol.
+                import os
+                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    try:
+                        with open(os.path.expanduser("~/.idm_cli/error.log"), "a") as f:
+                            f.write(f"Failed to queue: {url}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n---\n")
+                    except Exception:
+                        pass
+                
+                from idm_cli.daemon import is_daemon_running
+                if not is_daemon_running():
+                    # Launch visible terminal worker using python module
+                    worker_cmd = [sys.executable, '-m', 'idm_cli.cli', 'start queue']
+                    subprocess.Popen(worker_cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    
                 send_message({"status": "success"})
             else:
                 send_message({"status": "error", "message": "Unknown action"})

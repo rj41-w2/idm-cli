@@ -276,73 +276,86 @@ def download(
             raise typer.Exit()
 
         if current_url.strip().lower() in ["start queue", "queue start"]:
-            incomplete = get_incomplete_downloads()
-            queued = {tid: data for tid, data in incomplete.items() if data.get("status") == "queued"}
-            if not queued:
-                console.print("[bold green]No videos in queue![/]")
+            from idm_cli.daemon import acquire_lock, release_lock
+            if not acquire_lock():
+                console.print("[bold red]Queue daemon is already running![/]")
                 if not is_interactive:
-                    raise typer.Exit(code=0)
+                    raise typer.Exit(code=1)
                 current_url = None
                 continue
-                
-            for tid, data in queued.items():
-                console.print(f"[bold yellow]Starting queued download:[/] {data['title']}\n")
-                url_to_extract = data['url']
-                format_id = data['format_id']
-                video_dest = data['video_dest']
-                audio_dest = data['audio_dest']
-                final_dest = data['final_dest']
-                title = data['title']
-                
-                with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
-                    try:
-                        extractor = get_extractor(url_to_extract)
-                        info = extractor.fetch_all_info(url_to_extract)
-                    except Exception as e:
-                        console.print(f"[bold red]Error fetching info:[/] {e}")
-                        continue
-                
-                if format_id == "direct_file":
-                    ext = os.path.splitext(final_dest)[1].replace(".", "").upper()
-                    media_type = f"{ext} File" if ext else "File"
-                elif format_id == "audio_only":
-                    media_type = "Audio"
-                else:
-                    media_type = "Video"
+            
+            try:
+                while True:
+                    incomplete = get_incomplete_downloads()
+                    queued = {tid: data for tid, data in incomplete.items() if data.get("status") == "queued"}
+                    if not queued:
+                        console.print("[bold green]No videos in queue![/]")
+                        break
+                        
+                    tid, data = list(queued.items())[0]
+                    console.print(f"[bold yellow]Starting queued download:[/] {data['title']}\n")
+                    url_to_extract = data['url']
+                    format_id = data['format_id']
+                    video_dest = data['video_dest']
+                    audio_dest = data['audio_dest']
+                    final_dest = data['final_dest']
+                    title = data['title']
                     
-                with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
+                    with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
+                        try:
+                            extractor = get_extractor(url_to_extract)
+                            info = extractor.fetch_all_info(url_to_extract)
+                        except Exception as e:
+                            console.print(f"[bold red]Error fetching info:[/] {e}")
+                            remove_download(tid)
+                            continue
+                    
+                    if format_id == "direct_file":
+                        ext = os.path.splitext(final_dest)[1].replace(".", "").upper()
+                        media_type = f"{ext} File" if ext else "File"
+                    elif format_id == "audio_only":
+                        media_type = "Audio"
+                    else:
+                        media_type = "Video"
+                        
+                    with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
+                        try:
+                            extractor = get_extractor(url_to_extract)
+                            extracted = extractor.extract_urls(info, format_id)
+                            video_url = extracted.get("video_url")
+                            audio_url = extracted.get("audio_url")
+                            headers = extracted.get("headers", {})
+                            if not video_url: video_dest = ""
+                            if not audio_url: audio_dest = ""
+                        except Exception as e:
+                            console.print(f"[bold red]Error extracting URLs:[/] {e}")
+                            remove_download(tid)
+                            continue
+    
+                    pause_event = asyncio.Event()
+                    pause_event.set()
+                    warning_state = {"show": False}
+                    
                     try:
-                        extractor = get_extractor(url_to_extract)
-                        extracted = extractor.extract_urls(info, format_id)
-                        video_url = extracted.get("video_url")
-                        audio_url = extracted.get("audio_url")
-                        headers = extracted.get("headers", {})
-                        if not video_url: video_dest = ""
-                        if not audio_url: audio_dest = ""
+                        asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
+                        with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
+                            if video_dest and audio_dest:
+                                mux_audio_video(video_dest, audio_dest, final_dest)
+                            elif audio_dest and not video_dest:
+                                convert_to_mp3(audio_dest, final_dest)
+                            elif video_dest and not audio_dest:
+                                import shutil
+                                shutil.move(video_dest, final_dest)
+                        remove_download(tid)
+                        console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
+                    except KeyboardInterrupt:
+                        break
                     except Exception as e:
-                        console.print(f"[bold red]Error extracting URLs:[/] {e}")
-                        continue
-
-                pause_event = asyncio.Event()
-                pause_event.set()
-                warning_state = {"show": False}
+                        console.print(f"[bold red]Download failed:[/] {e}")
+                        remove_download(tid)
+            finally:
+                release_lock()
                 
-                try:
-                    asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
-                    with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
-                        if video_dest and audio_dest:
-                            mux_audio_video(video_dest, audio_dest, final_dest)
-                        elif audio_dest and not video_dest:
-                            convert_to_mp3(audio_dest, final_dest)
-                        elif video_dest and not audio_dest:
-                            import shutil
-                            shutil.move(video_dest, final_dest)
-                    remove_download(tid)
-                    console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
-                except KeyboardInterrupt:
-                    break
-                except Exception as e:
-                    console.print(f"[bold red]Download failed:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=0)
             current_url = None
