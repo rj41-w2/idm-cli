@@ -278,16 +278,72 @@ def download(
             
         if current_url.strip().lower() == "install extension":
             import os
-            ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'browser_extension'))
+            import shutil
+            import sys
+            import json
+            import winreg
+            
+            src_ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'browser_extension'))
+            base_dir = os.path.expanduser('~/.idm_cli')
+            dest_ext_path = os.path.join(base_dir, 'browser_extension')
+            
+            try:
+                os.makedirs(base_dir, exist_ok=True)
+                if os.path.exists(dest_ext_path):
+                    shutil.rmtree(dest_ext_path)
+                shutil.copytree(src_ext_path, dest_ext_path)
+            except Exception as e:
+                console.print(f"[bold red]Failed to copy extension files:[/] {e}")
+                continue
+                
             console.print("\n[bold yellow]--- How to Install IDM-CLI Extension ---[/bold yellow]")
             console.print("[cyan]The browser extension allows you to download files and videos directly via IDM-CLI![/cyan]\n")
-            console.print(f"Extension Source Folder: [bold green]{ext_path}[/bold green]\n")
+            console.print(f"Extension Folder: [bold green]{dest_ext_path}[/bold green]\n")
             console.print("1. Open Chrome or Edge and go to [bold]chrome://extensions[/bold] or [bold]edge://extensions[/bold]")
             console.print("2. Turn on [bold]'Developer mode'[/bold] (usually in the top right corner).")
-            console.print("3. Click [bold]'Load unpacked'[/bold] and select the Folder path shown above.")
-            console.print("4. Copy the Extension ID that is generated.")
-            console.print("5. Open a terminal, go to the IDM-CLI folder, and run: [bold green]python install_extension.py[/bold green]")
-            console.print("6. Paste the Extension ID when prompted. Done!\n")
+            console.print("3. Click [bold]'Load unpacked'[/bold] and select the Extension Folder shown above.")
+            console.print("4. Copy the Extension ID that is generated.\n")
+            
+            ext_id = questionary.text("Paste the Extension ID here (or press Enter to cancel):", style=custom_style).ask()
+            if not ext_id:
+                console.print("[bold red]Installation Cancelled.[/bold red]\n")
+                continue
+                
+            ext_id = ext_id.strip()
+            
+            bat_path = os.path.join(base_dir, 'native_host.bat')
+            with open(bat_path, 'w') as f:
+                f.write(f"@echo off\n{sys.executable} -m idm_cli.native_host\n")
+                
+            manifest_path = os.path.join(base_dir, 'com.idm.cli.json')
+            manifest = {
+                "name": "com.idm.cli",
+                "description": "IDM-CLI Native Messaging Host",
+                "path": bat_path,
+                "type": "stdio",
+                "allowed_origins": [
+                    f"chrome-extension://{ext_id}/"
+                ]
+            }
+            
+            with open(manifest_path, 'w') as f:
+                json.dump(manifest, f, indent=4)
+                
+            try:
+                key_path = r"Software\Google\Chrome\NativeMessagingHosts\com.idm.cli"
+                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, manifest_path)
+                winreg.CloseKey(key)
+                
+                edge_key_path = r"Software\Microsoft\Edge\NativeMessagingHosts\com.idm.cli"
+                edge_key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, edge_key_path)
+                winreg.SetValueEx(edge_key, "", 0, winreg.REG_SZ, manifest_path)
+                winreg.CloseKey(edge_key)
+                
+                console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")
+                console.print("[dim]You can now right-click any video or file link and click 'Download with IDM-CLI', or IDM-CLI will automatically catch file downloads![/dim]\n")
+            except Exception as e:
+                console.print(f"\n[bold red]Failed to write to registry:[/] {e}\n")
             continue
             
         if current_url.strip().lower() == "exit":
