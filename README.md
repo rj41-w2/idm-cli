@@ -1,5 +1,7 @@
 # IDM-CLI (Internet Download Manager CLI)
 
+*Inspired by the official [Internet Download Manager (IDM)](https://www.internetdownloadmanager.com/)*
+
 A lightning-fast, powerful, and universal command-line download manager written in Python. IDM-CLI splits files into multiple parallel chunks (default 8, up to 32) to maximize your internet speed. It seamlessly supports downloading from **YouTube**, **Facebook**, **Instagram**, and any **Direct File URL** (`.exe`, `.zip`, `.pdf`, etc.).
 
 ## 🚀 Features
@@ -12,6 +14,7 @@ A lightning-fast, powerful, and universal command-line download manager written 
 - **Persistent Queue System (`-Q`):** Add multiple files or videos to a queue and type `start queue` to automatically download all of them sequentially in the background.
 - **Pristine Downloads Folder:** All temporary chunks and raw media files are kept hidden in `~/.idm_cli/tmp/`. Only the fully assembled, 100% complete files are moved to your `~/Downloads` folder.
 - **Smart Auto-Update:** Once a day, IDM-CLI automatically checks the PyPI database in the background. If a new version is available, it handles the `pip install --upgrade` process for you seamlessly!
+- **Browser Extension Integration:** Automatically intercept downloads from Chrome and Edge and route them directly into the IDM-CLI high-speed downloader!
 - **Interactive UI:** A beautiful, responsive terminal interface powered by `rich` and `questionary` with real-time speed, ETA, and progress bars.
 - **Pause & Play:** Press `p` to pause the active downloads without losing progress, and `r` to resume them.
 
@@ -66,6 +69,15 @@ To start downloading all items currently in your queue, simply type:
 idm start queue
 ```
 *(You can also just type `start queue` into the interactive `idm` prompt!)*
+
+### Browser Extension
+
+IDM-CLI comes with a built-in Chrome/Edge extension that can automatically catch your downloads!
+To install the extension, simply open IDM-CLI and type:
+```bash
+install extension
+```
+Follow the interactive on-screen guide to easily load the extension and link it to IDM-CLI natively.
 
 ## ⚙️ Architecture Highlights
 

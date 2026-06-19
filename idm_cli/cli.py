@@ -7,6 +7,9 @@ import typer
 import signal
 import shlex
 import argparse
+import shutil
+import json
+import winreg
 from typing import Optional
 from rich.console import Console
 from rich.progress import (
@@ -277,12 +280,6 @@ def download(
             continue
             
         if current_url.strip().lower() == "install extension":
-            import os
-            import shutil
-            import sys
-            import json
-            import winreg
-            
             src_ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'browser_extension'))
             base_dir = os.path.expanduser('~/.idm_cli')
             dest_ext_path = os.path.join(base_dir, 'browser_extension')
