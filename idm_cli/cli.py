@@ -46,6 +46,10 @@ CHANGELOG = {
         "Enhanced update prompt for better user experience.",
         "Enhanced download_media function to accept media_type parameter and improved console output.",
         "Enhanced video info extraction for Facebook and Instagram, and improved error handling for FFmpeg in muxer."
+    ],
+    "1.1.8": [
+        "Added a new browser extension for capturing downloads seamlessly.",
+        "Fixed minor bugs and improved overall stability."
     ]
 }
 
@@ -284,9 +288,22 @@ def download(
             base_dir = os.path.expanduser('~/.idm_cli')
             dest_ext_path = os.path.join(base_dir, 'browser_extension')
             
+            is_updated = False
             try:
                 os.makedirs(base_dir, exist_ok=True)
                 if os.path.exists(dest_ext_path):
+                    old_manifest_path = os.path.join(dest_ext_path, 'manifest.json')
+                    new_manifest_path = os.path.join(src_ext_path, 'manifest.json')
+                    try:
+                        if os.path.exists(old_manifest_path) and os.path.exists(new_manifest_path):
+                            with open(old_manifest_path, 'r') as f:
+                                old_version = json.load(f).get("version", "")
+                            with open(new_manifest_path, 'r') as f:
+                                new_version = json.load(f).get("version", "")
+                            if old_version and new_version and old_version != new_version:
+                                is_updated = True
+                    except Exception:
+                        pass
                     shutil.rmtree(dest_ext_path)
                 shutil.copytree(src_ext_path, dest_ext_path)
             except Exception as e:
@@ -315,8 +332,9 @@ def download(
             
             if existing_ext_id:
                 console.print(f"[bold cyan]You have already configured this Extension ID: {existing_ext_id}[/bold cyan]")
-                console.print("[bold yellow]Update Note:[/bold yellow] The extension files on your disk have been updated to the latest version.")
-                console.print("To apply the update in your browser, go to [bold]chrome://extensions[/bold] and click the [bold]'Reload'[/bold] icon (↻) on the IDM-CLI extension card.\n")
+                if is_updated:
+                    console.print("[bold yellow]Update Note:[/bold yellow] The extension files on your disk have been updated to the latest version.")
+                    console.print("To apply the update in your browser, go to [bold]chrome://extensions[/bold] and click the [bold]'Reload'[/bold] icon (↻) on the IDM-CLI extension card.\n")
                 prompt_text = "If you want to change the ID, paste the new ID here, otherwise just press enter:"
             else:
                 prompt_text = "Paste the Extension ID here (or press enter):"
@@ -439,7 +457,6 @@ def download(
                             elif audio_dest and not video_dest:
                                 convert_to_mp3(audio_dest, final_dest)
                             elif video_dest and not audio_dest:
-                                import shutil
                                 shutil.move(video_dest, final_dest)
                         remove_download(tid)
                         console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
@@ -693,7 +710,6 @@ def download(
                 elif audio_dest and not video_dest:
                     convert_to_mp3(audio_dest, final_dest)
                 elif video_dest and not audio_dest:
-                    import shutil
                     shutil.move(video_dest, final_dest)
             except Exception as e:
                 console.print(f"[bold red]Muxing failed:[/] {e}")
