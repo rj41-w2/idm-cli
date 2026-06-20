@@ -9,7 +9,6 @@ import shlex
 import argparse
 import shutil
 import json
-import winreg
 from typing import Optional
 from rich.console import Console
 from rich.progress import (
@@ -50,6 +49,10 @@ CHANGELOG = {
     "1.1.8": [
         "Added a new browser extension for capturing downloads seamlessly.",
         "Fixed minor bugs and improved overall stability."
+    ],
+    "1.1.9": [
+        "Added Cross-Platform support: IDM-CLI extension now natively installs on Windows, macOS, and Linux.",
+        "Refactored extension installation logic for better OS compatibility."
     ]
 }
 
@@ -284,6 +287,7 @@ def download(
             continue
             
         if current_url.strip().lower() == "install extension":
+            import platform
             src_ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'browser_extension'))
             base_dir = os.path.expanduser('~/.idm_cli')
             dest_ext_path = os.path.join(base_dir, 'browser_extension')
@@ -349,39 +353,89 @@ def download(
                 
             ext_id = ext_id.strip()
             
-            bat_path = os.path.join(base_dir, 'native_host.bat')
-            with open(bat_path, 'w') as f:
-                f.write(f"@echo off\n{sys.executable} -m idm_cli.native_host\n")
-                
-            manifest_path = os.path.join(base_dir, 'com.idm.cli.json')
-            manifest = {
-                "name": "com.idm.cli",
-                "description": "IDM-CLI Native Messaging Host",
-                "path": bat_path,
-                "type": "stdio",
-                "allowed_origins": [
-                    f"chrome-extension://{ext_id}/"
-                ]
-            }
+            system_name = platform.system()
             
-            with open(manifest_path, 'w') as f:
-                json.dump(manifest, f, indent=4)
+            if system_name == "Windows":
+                import winreg
+                bat_path = os.path.join(base_dir, 'native_host.bat')
+                with open(bat_path, 'w') as f:
+                    f.write(f"@echo off\n{sys.executable} -m idm_cli.native_host\n")
+                    
+                manifest_path = os.path.join(base_dir, 'com.idm.cli.json')
+                manifest = {
+                    "name": "com.idm.cli",
+                    "description": "IDM-CLI Native Messaging Host",
+                    "path": bat_path,
+                    "type": "stdio",
+                    "allowed_origins": [
+                        f"chrome-extension://{ext_id}/"
+                    ]
+                }
                 
-            try:
-                key_path = r"Software\Google\Chrome\NativeMessagingHosts\com.idm.cli"
-                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
-                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, manifest_path)
-                winreg.CloseKey(key)
+                with open(manifest_path, 'w') as f:
+                    json.dump(manifest, f, indent=4)
+                    
+                try:
+                    key_path = r"Software\Google\Chrome\NativeMessagingHosts\com.idm.cli"
+                    key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+                    winreg.SetValueEx(key, "", 0, winreg.REG_SZ, manifest_path)
+                    winreg.CloseKey(key)
+                    
+                    edge_key_path = r"Software\Microsoft\Edge\NativeMessagingHosts\com.idm.cli"
+                    edge_key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, edge_key_path)
+                    winreg.SetValueEx(edge_key, "", 0, winreg.REG_SZ, manifest_path)
+                    winreg.CloseKey(edge_key)
+                    
+                    console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")
+                    console.print("[dim]You can now catch any link through the extension![/dim]\n")
+                except Exception as e:
+                    console.print(f"\n[bold red]Failed to write to registry:[/] {e}\n")
+            else:
+                sh_path = os.path.join(base_dir, 'native_host.sh')
+                with open(sh_path, 'w') as f:
+                    f.write(f"#!/bin/bash\n{sys.executable} -m idm_cli.native_host\n")
+                os.chmod(sh_path, 0o755)
+
+                manifest_path = os.path.join(base_dir, 'com.idm.cli.json')
+                manifest = {
+                    "name": "com.idm.cli",
+                    "description": "IDM-CLI Native Messaging Host",
+                    "path": sh_path,
+                    "type": "stdio",
+                    "allowed_origins": [
+                        f"chrome-extension://{ext_id}/"
+                    ]
+                }
                 
-                edge_key_path = r"Software\Microsoft\Edge\NativeMessagingHosts\com.idm.cli"
-                edge_key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, edge_key_path)
-                winreg.SetValueEx(edge_key, "", 0, winreg.REG_SZ, manifest_path)
-                winreg.CloseKey(edge_key)
-                
-                console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")
-                console.print("[dim]You can now catch any link through the extension![/dim]\n")
-            except Exception as e:
-                console.print(f"\n[bold red]Failed to write to registry:[/] {e}\n")
+                with open(manifest_path, 'w') as f:
+                    json.dump(manifest, f, indent=4)
+
+                target_dirs = [
+                    os.path.expanduser("~/.config/google-chrome/NativeMessagingHosts"),
+                    os.path.expanduser("~/.config/chromium/NativeMessagingHosts"),
+                    os.path.expanduser("~/.config/microsoft-edge/NativeMessagingHosts"),
+                    os.path.expanduser("~/Library/Application Support/Google/Chrome/NativeMessagingHosts"),
+                    os.path.expanduser("~/Library/Application Support/Chromium/NativeMessagingHosts"),
+                    os.path.expanduser("~/Library/Application Support/Microsoft Edge/NativeMessagingHosts")
+                ]
+
+                success_count = 0
+                for d in target_dirs:
+                    if os.path.exists(os.path.dirname(d)):
+                        os.makedirs(d, exist_ok=True)
+                        dest_manifest = os.path.join(d, 'com.idm.cli.json')
+                        try:
+                            shutil.copy(manifest_path, dest_manifest)
+                            success_count += 1
+                        except Exception:
+                            pass
+
+                if success_count > 0:
+                    console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")
+                    console.print("[dim]You can now catch any link through the extension![/dim]\n")
+                else:
+                    console.print("\n[bold yellow]Could not find standard browser directories to copy the manifest. Please configure manually.[/bold yellow]\n")
+
             continue
             
         if current_url.strip().lower() == "exit":
