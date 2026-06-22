@@ -2,6 +2,8 @@ import importlib
 import urllib.request
 
 def get_extractor(url: str):
+    if url.strip().startswith("winget "):
+        return importlib.import_module("idm_cli.extractors.winget")
     if "facebook.com" in url or "fb.watch" in url:
         return importlib.import_module("idm_cli.extractors.facebook")
     if "instagram.com" in url:

@@ -53,6 +53,9 @@ CHANGELOG = {
     "1.1.9": [
         "Added Cross-Platform support: IDM-CLI extension now natively installs on Windows, macOS, and Linux.",
         "Refactored extension installation logic for better OS compatibility."
+    ],
+    "1.2.0": [
+        "Added native support for winget install commands, enabling high-speed parallel downloads for Windows packages."
     ]
 }
 
@@ -240,7 +243,7 @@ def download(
         
         found_task_id = None
 
-        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume", "install extension"]:
+        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume", "install extension"] and not current_url.strip().lower().startswith("winget "):
             try:
                 parts = shlex.split(current_url)
                 parser = argparse.ArgumentParser(add_help=False)
