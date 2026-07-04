@@ -48,8 +48,9 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                                 pass
                                 
                         if progress_queue is not None and task_id is not None:
+                            current_task_id = task_id[chunk_index] if isinstance(task_id, list) else task_id
                             await progress_queue.put({
-                                'task_id': task_id,
+                                'task_id': current_task_id,
                                 'chunk_index': chunk_index,
                                 'bytes_downloaded': len(chunk)
                             })
@@ -70,8 +71,16 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
     if os.path.exists(dest_path) and not os.path.exists(progress_file):
         file_size = os.path.getsize(dest_path)
         if progress_queue is not None and task_id is not None:
-            await progress_queue.put({'task_id': task_id, 'total_size': file_size})
-            await progress_queue.put({'task_id': task_id, 'bytes_downloaded': file_size})
+            if isinstance(task_id, list):
+                chunk_size_est = file_size // num_chunks
+                for i in range(num_chunks):
+                    end = file_size - 1 if i == num_chunks - 1 else ((i * chunk_size_est) + chunk_size_est - 1)
+                    c_size = end - (i * chunk_size_est) + 1
+                    await progress_queue.put({'task_id': task_id[i], 'total_size': c_size})
+                    await progress_queue.put({'task_id': task_id[i], 'bytes_downloaded': c_size})
+            else:
+                await progress_queue.put({'task_id': task_id, 'total_size': file_size})
+                await progress_queue.put({'task_id': task_id, 'bytes_downloaded': file_size})
         return
 
     if os.path.exists(progress_file):
@@ -115,6 +124,8 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
         async with aiofiles.open(dest_path, 'wb') as f:
             await f.seek(file_size - 1)
             await f.write(b'\0')
+        async with aiofiles.open(progress_file, 'w') as pf:
+            await pf.write("{}")
             
     if not file_size:
         # Fallback to single chunk download
@@ -127,18 +138,35 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
         return
 
     if progress_queue is not None and task_id is not None:
-        await progress_queue.put({
-            'task_id': task_id,
-            'total_size': file_size
-        })
-        
-        total_existing_size = sum(chunk_progress.values())
-        
-        if total_existing_size > 0:
+        if isinstance(task_id, list):
+            chunk_size_est = file_size // num_chunks
+            for i in range(num_chunks):
+                start = i * chunk_size_est
+                end = file_size - 1 if i == num_chunks - 1 else (start + chunk_size_est - 1)
+                c_size = end - start + 1
+                await progress_queue.put({
+                    'task_id': task_id[i],
+                    'total_size': c_size
+                })
+                existing = chunk_progress.get(str(i), 0)
+                if existing > 0:
+                    await progress_queue.put({
+                        'task_id': task_id[i],
+                        'bytes_downloaded': existing
+                    })
+        else:
             await progress_queue.put({
                 'task_id': task_id,
-                'bytes_downloaded': total_existing_size
+                'total_size': file_size
             })
+            
+            total_existing_size = sum(chunk_progress.values())
+            
+            if total_existing_size > 0:
+                await progress_queue.put({
+                    'task_id': task_id,
+                    'bytes_downloaded': total_existing_size
+                })
 
     chunk_size = file_size // num_chunks
     tasks = []

@@ -161,13 +161,19 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         TimeRemainingColumn(),
         console=console
     ) as progress:
-        video_task_id = progress.add_task(f"[cyan]{media_type}", total=None) if video_url else None
+        video_task_ids = []
+        if video_url:
+            for i in range(chunks):
+                video_task_ids.append(progress.add_task(f"[cyan]{media_type} Chunk {i+1}/{chunks}", total=None))
+        else:
+            video_task_ids = None
+
         audio_task_id = progress.add_task("[magenta]Audio", total=None) if audio_url else None
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None)) as session:
-            v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_id, pause_event)) if video_url else None
+            v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_ids, pause_event)) if video_url else None
             a_task = asyncio.create_task(download_file(session, audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
     
             tasks_to_gather = []

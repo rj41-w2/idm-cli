@@ -79,6 +79,13 @@ install extension
 ```
 Follow the interactive on-screen guide to easily load the extension and link it to IDM-CLI natively.
 
+### 🛡️ Troubleshooting: Windows Device Guard (AppLocker)
+If you get an error like `"idm.exe was blocked by your organization's Device Guard policy"` when running the tool, Windows is blocking the auto-generated `.exe`. You can safely bypass this by calling the python module directly:
+```bash
+python -m idm_cli
+```
+You can also append any flags exactly the same way: `python -m idm_cli "https://youtube.com/..." -q 1080p`
+
 ## ⚙️ Architecture Highlights
 
 - **`downloader.py`:** The core asynchronous engine handling `aiohttp` range requests, chunk merging, and resume states.
