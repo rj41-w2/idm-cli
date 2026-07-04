@@ -6,6 +6,11 @@ def fetch_all_info(url: str) -> dict:
     ydl_opts = {
         'noplaylist': True,
         'quiet': True,
+        'no_warnings': True,
+        'skip_download': True,
+        'writesubtitles': False,
+        'writeautomaticsub': False,
+        'getcomments': False,
         'extractor_args': {'youtube': ['player_client=android,ios']},
     }
     try:
