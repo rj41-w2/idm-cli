@@ -3,6 +3,16 @@ import os
 import aiohttp
 import aiofiles
 import json
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    DownloadColumn,
+    TransferSpeedColumn
+)
+from idm_cli.utils import console, progress_listener
 
 async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None, chunk_progress: dict = None):
     max_retries = 5
@@ -32,7 +42,15 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                 
                 async with aiofiles.open(dest_path, 'r+b') as f:
                     await f.seek(current_start)
-                    async for chunk in response.content.iter_chunked(4 * 1024 * 1024):
+                    
+                    total_bytes = end - current_start + 1 if end else 0
+                    buffer_size = 1024 * 1024
+                    if total_bytes > 50 * 1024 * 1024:
+                        buffer_size = 4 * 1024 * 1024
+                    elif total_bytes > 0 and total_bytes < 5 * 1024 * 1024:
+                        buffer_size = 256 * 1024
+                        
+                    async for chunk in response.content.iter_chunked(buffer_size):
                         if pause_event is not None:
                             await pause_event.wait()
                         if not chunk:
@@ -122,8 +140,7 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
             
     if file_size and not os.path.exists(dest_path):
         async with aiofiles.open(dest_path, 'wb') as f:
-            await f.seek(file_size - 1)
-            await f.write(b'\0')
+            await f.truncate(file_size)
         async with aiofiles.open(progress_file, 'w') as pf:
             await pf.write("{}")
             
@@ -184,3 +201,42 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
             os.remove(progress_file)
         except OSError:
             pass
+
+async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event, warning_state: dict = None, media_type: str = "Video"):
+    queue = asyncio.Queue()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}", justify="right"),
+        BarColumn(bar_width=40),
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=console
+    ) as progress:
+        video_task_ids = []
+        if video_url:
+            for i in range(chunks):
+                video_task_ids.append(progress.add_task(f"[cyan]{media_type} Chunk {i+1}/{chunks}", total=None))
+        else:
+            video_task_ids = None
+
+        audio_task_id = progress.add_task("[magenta]Audio", total=None) if audio_url else None
+
+        listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None), connector=aiohttp.TCPConnector(limit=0)) as session:
+            v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_ids, pause_event)) if video_url else None
+            a_task = asyncio.create_task(download_file(session, audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
+    
+            tasks_to_gather = []
+            if a_task:
+                tasks_to_gather.append(a_task)
+            if v_task:
+                tasks_to_gather.append(v_task)
+    
+            await asyncio.gather(*tasks_to_gather)
+
+        await queue.put(None)
+        await listener
