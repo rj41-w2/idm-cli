@@ -10,7 +10,8 @@ from idm_cli.state import save_download, remove_download, get_incomplete_downloa
 from idm_cli.extractors import get_extractor
 from idm_cli.downloader import download_media
 from idm_cli.muxer import mux_audio_video, convert_to_mp3
-from idm_cli.utils import console, custom_style
+from idm_cli.utils import console, custom_style, sanitize_filename
+from idm_cli.config import logger
 
 def process_download(
     current_url: str,
@@ -68,7 +69,8 @@ def process_download(
             resolutions = []
             if not found_task_id and format_id != "audio_only":
                 resolutions = extractor.get_video_resolutions(info)
-        except Exception as e:
+        except (ValueError, TypeError, OSError) as e:
+            logger.error(f"Error fetching info: {e}")
             console.print(f"[bold red]Error fetching info:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=1)
@@ -103,8 +105,10 @@ def process_download(
             selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
             format_id = selected_format['format_id']
         
-        safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_.']).rstrip()[:60].strip()
-        downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+        safe_title = sanitize_filename(title)
+        from idm_cli.config import load_config
+        config = load_config()
+        downloads_dir = config.get("download_dir", os.path.join(os.path.expanduser("~"), "Downloads"))
         os.makedirs(downloads_dir, exist_ok=True)
         
         tmp_dir = os.path.expanduser("~/.idm_cli/tmp")
@@ -147,7 +151,8 @@ def process_download(
             headers = extracted.get("headers", {})
             if not video_url: video_dest = ""
             if not audio_url: audio_dest = ""
-        except Exception as e:
+        except (ValueError, TypeError, OSError) as e:
+            logger.error(f"Error extracting URLs: {e}")
             console.print(f"[bold red]Error extracting URLs:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=1)
@@ -169,7 +174,7 @@ def process_download(
         nonlocal last_dl_ctrl_c
         if time.time() - last_dl_ctrl_c <= 5:
             signal.signal(signal.SIGINT, original_sigint)
-            os.kill(os.getpid(), signal.SIGINT)
+            raise KeyboardInterrupt
         else:
             warning_state["show"] = True
             last_dl_ctrl_c = time.time()
@@ -181,7 +186,8 @@ def process_download(
     except KeyboardInterrupt:
         console.print("\n[bold red]Download cancelled by user. Progress saved to resume later.[/bold red]")
         return False
-    except Exception as e:
+    except (ValueError, TypeError, OSError) as e:
+        logger.error(f"Download failed: {e}")
         console.print(f"[bold red]Download failed:[/] {e}")
         if not is_interactive:
             raise typer.Exit(code=1)
@@ -200,7 +206,8 @@ def process_download(
                 convert_to_mp3(audio_dest, final_dest)
             elif video_dest and not audio_dest:
                 shutil.move(video_dest, final_dest)
-        except Exception as e:
+        except (ValueError, TypeError, OSError) as e:
+            logger.error(f"Muxing failed: {e}")
             console.print(f"[bold red]Muxing failed:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=1)

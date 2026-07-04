@@ -4,10 +4,6 @@ import urllib.request
 def get_extractor(url: str):
     if url.strip().startswith("winget "):
         return importlib.import_module("idm_cli.extractors.winget")
-    if "facebook.com" in url or "fb.watch" in url:
-        return importlib.import_module("idm_cli.extractors.facebook")
-    if "instagram.com" in url:
-        return importlib.import_module("idm_cli.extractors.instagram")
     
     try:
         req = urllib.request.Request(url, method='HEAD', headers={'User-Agent': 'Mozilla/5.0'})
@@ -18,5 +14,5 @@ def get_extractor(url: str):
     except Exception:
         pass
 
-    # Default to youtube (handles youtube, twitter, and generic sites mostly)
-    return importlib.import_module("idm_cli.extractors.youtube")
+    # Default to ytdlp (handles youtube, twitter, facebook, instagram and generic sites mostly)
+    return importlib.import_module("idm_cli.extractors.ytdlp")

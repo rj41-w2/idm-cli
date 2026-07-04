@@ -13,6 +13,7 @@ from rich.progress import (
     TransferSpeedColumn
 )
 from idm_cli.utils import console, progress_listener
+from idm_cli.config import logger
 
 async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None, chunk_progress: dict = None):
     max_retries = 5
@@ -62,8 +63,8 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                             try:
                                 async with aiofiles.open(progress_file, 'w') as pf:
                                     await pf.write(json.dumps(chunk_progress))
-                            except Exception:
-                                pass
+                            except OSError as e:
+                                logger.debug(f"Failed to write progress: {e}")
                                 
                         if progress_queue is not None and task_id is not None:
                             current_task_id = task_id[chunk_index] if isinstance(task_id, list) else task_id
@@ -107,7 +108,8 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
                 content = await f.read()
                 if content:
                     chunk_progress = json.loads(content)
-        except Exception:
+        except (OSError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to read progress: {e}")
             chunk_progress = {}
 
     if headers is None:
@@ -199,8 +201,8 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
     if os.path.exists(progress_file):
         try:
             os.remove(progress_file)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug(f"Failed to remove progress file: {e}")
 
 async def download_media(video_url: str, audio_url: str, headers: dict, chunks: int, video_dest: str, audio_dest: str, pause_event: asyncio.Event, warning_state: dict = None, media_type: str = "Video"):
     queue = asyncio.Queue()

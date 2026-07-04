@@ -8,3 +8,5 @@ questionary
 aiodns
 Brotli
 psutil
+pytest
+pytest-asyncio

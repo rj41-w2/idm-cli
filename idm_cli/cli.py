@@ -12,13 +12,16 @@ from idm_cli.utils import console, custom_style, IDMLexer, check_first_run
 from idm_cli.extension import install_extension
 from idm_cli.handlers import handle_queue, handle_resume
 from idm_cli.core import process_download
+from idm_cli.config import load_config
+
+global_config = load_config()
 
 app = typer.Typer(help="IDM-CLI: A lightning-fast YouTube downloader.")
 
 @app.command()
 def download(
     url: Optional[str] = typer.Argument(None, help="The Video URL to download."),
-    chunks: int = typer.Option(8, "--chunks", "-c", help="Number of concurrent chunks per file."),
+    chunks: int = typer.Option(global_config.get("default_chunks", 8), "--chunks", "-c", help="Number of concurrent chunks per file."),
     quality: Optional[str] = typer.Option(None, "--quality", "-q", help="Video quality (e.g., 720p, 1080p)."),
     audio_only: bool = typer.Option(False, "--audio-only", "-a", help="Download audio only."),
     video_only: bool = typer.Option(False, "--video", "-v", help="Download video + audio (bypasses prompt)."),
@@ -104,7 +107,7 @@ def download(
 
         fast_mode = not is_interactive or loop_quality or loop_audio_only or loop_video_only or loop_queue
         if fast_mode and not loop_quality and not loop_audio_only:
-            loop_quality = "720p"
+            loop_quality = global_config.get("default_quality", "720p")
 
         if current_url.strip().lower() == "help":
             console.print("\n[bold cyan] Available Commands:[/bold cyan]")
@@ -121,10 +124,16 @@ def download(
             console.print("  [bold white]-Q[/bold white]          - Add directly to Queue instead of downloading")
             console.print("  [bold white]-c <num>[/bold white]    - Set number of parallel chunks (default: 8)")
             console.print("\n  [dim italic]Example: https://youtube.com/... -q 1080p -Q[/dim italic]\n")
+            if not is_interactive:
+                raise typer.Exit()
+            current_url = None
             continue
             
         if current_url.strip().lower() == "install extension":
             install_extension()
+            if not is_interactive:
+                raise typer.Exit()
+            current_url = None
             continue
             
         if current_url.strip().lower() == "exit":

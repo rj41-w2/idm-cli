@@ -5,6 +5,7 @@ import sys
 import platform
 import questionary
 from idm_cli.utils import console, custom_style
+from idm_cli.config import logger
 
 def install_extension():
     src_ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'browser_extension'))
@@ -25,11 +26,12 @@ def install_extension():
                         new_version = json.load(f).get("version", "")
                     if old_version and new_version and old_version != new_version:
                         is_updated = True
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                logger.debug(f"Failed to read extension version: {e}")
             shutil.rmtree(dest_ext_path)
         shutil.copytree(src_ext_path, dest_ext_path)
-    except Exception as e:
+    except OSError as e:
+        logger.error(f"Failed to copy extension files: {e}")
         console.print(f"[bold red]Failed to copy extension files:[/] {e}")
         return
         
@@ -42,8 +44,8 @@ def install_extension():
                 origin = old_manifest.get("allowed_origins", [""])[0]
                 if origin.startswith("chrome-extension://"):
                     existing_ext_id = origin.split("://")[1].strip("/")
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to read manifest: {e}")
             
     console.print("\n[bold yellow]--- How to Install IDM-CLI Extension ---[/bold yellow]")
     console.print("[cyan]The browser extension allows you to download files and videos directly via IDM-CLI![/cyan]\n")
@@ -107,7 +109,8 @@ def install_extension():
             
             console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")
             console.print("[dim]You can now catch any link through the extension![/dim]\n")
-        except Exception as e:
+        except OSError as e:
+            logger.error(f"Failed to write to registry: {e}")
             console.print(f"\n[bold red]Failed to write to registry:[/] {e}\n")
     else:
         sh_path = os.path.join(base_dir, 'native_host.sh')
@@ -146,8 +149,8 @@ def install_extension():
                 try:
                     shutil.copy(manifest_path, dest_manifest)
                     success_count += 1
-                except Exception:
-                    pass
+                except OSError as e:
+                    logger.debug(f"Failed to copy manifest to {d}: {e}")
 
         if success_count > 0:
             console.print("\n[bold green]Success! The extension is now connected to IDM-CLI![/bold green]")

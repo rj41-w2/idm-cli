@@ -6,6 +6,7 @@ import subprocess
 import sys
 import questionary
 from rich.console import Console
+from idm_cli.config import logger
 
 def check_for_updates():
     config_dir = os.path.expanduser("~/.idm_cli")
@@ -19,8 +20,8 @@ def check_for_updates():
                 last_check_time = data.get("last_check_time", 0)
                 if time.time() - last_check_time < 86400:
                     return
-    except Exception:
-        pass
+    except (OSError, json.JSONDecodeError) as e:
+        logger.debug(f"Failed to read last_check.json: {e}")
 
     # Fetch latest version from PyPI
     try:
@@ -28,7 +29,8 @@ def check_for_updates():
         with urllib.request.urlopen(req, timeout=3) as response:
             data = json.loads(response.read().decode("utf-8"))
             latest_version = data.get("info", {}).get("version")
-    except Exception:
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
+        logger.debug(f"Update check network failed: {e}")
         return
 
     if not latest_version:
@@ -48,7 +50,8 @@ def check_for_updates():
         # Fallback to tuple or string comparison
         try:
             is_newer = tuple(map(int, latest_version.split("."))) > tuple(map(int, __version__.split(".")))
-        except Exception:
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Version comparison fallback: {e}")
             is_newer = latest_version > __version__
 
     if is_newer:
@@ -63,5 +66,5 @@ def check_for_updates():
         os.makedirs(config_dir, exist_ok=True)
         with open(last_check_file, "w") as f:
             json.dump({"last_check_time": time.time()}, f)
-    except Exception:
-        pass
+    except OSError as e:
+        logger.warning(f"Failed to write last_check.json: {e}")

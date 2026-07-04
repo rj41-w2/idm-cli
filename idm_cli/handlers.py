@@ -9,6 +9,7 @@ from idm_cli.downloader import download_media
 from idm_cli.muxer import mux_audio_video, convert_to_mp3
 from idm_cli.utils import console, custom_style
 from idm_cli.daemon import acquire_lock, release_lock
+from idm_cli.config import logger
 
 def handle_queue(is_interactive: bool, loop_chunks: int):
     if not acquire_lock():
@@ -37,7 +38,8 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
                 try:
                     extractor = get_extractor(url_to_extract)
                     info = extractor.fetch_all_info(url_to_extract)
-                except Exception as e:
+                except (ValueError, TypeError, OSError) as e:
+                    logger.error(f"Error fetching info: {e}")
                     console.print(f"[bold red]Error fetching info:[/] {e}")
                     remove_download(tid)
                     continue
@@ -59,7 +61,8 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
                     headers = extracted.get("headers", {})
                     if not video_url: video_dest = ""
                     if not audio_url: audio_dest = ""
-                except Exception as e:
+                except (ValueError, TypeError, OSError) as e:
+                    logger.error(f"Error extracting URLs: {e}")
                     console.print(f"[bold red]Error extracting URLs:[/] {e}")
                     remove_download(tid)
                     continue
@@ -81,7 +84,8 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
                 console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
             except KeyboardInterrupt:
                 break
-            except Exception as e:
+            except (ValueError, TypeError, OSError) as e:
+                logger.error(f"Download failed: {e}")
                 console.print(f"[bold red]Download failed:[/] {e}")
                 remove_download(tid)
     finally:

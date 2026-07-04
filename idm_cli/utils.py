@@ -7,10 +7,38 @@ import questionary
 from prompt_toolkit.lexers import Lexer
 from idm_cli import __version__
 
+def sanitize_filename(title: str) -> str:
+    return "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_.']).rstrip()[:60].strip()
+
 try:
     import msvcrt
 except ImportError:
     msvcrt = None
+
+import sys
+try:
+    import select
+    import termios
+    import tty
+except ImportError:
+    pass
+
+def check_key_press():
+    if sys.platform == 'win32':
+        if msvcrt and msvcrt.kbhit():
+            return msvcrt.getch().decode('utf-8', 'ignore').lower()
+    else:
+        if 'select' in sys.modules and 'termios' in sys.modules and 'tty' in sys.modules:
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setcbreak(sys.stdin.fileno())
+                dr, dw, de = select.select([sys.stdin], [], [], 0)
+                if dr:
+                    return sys.stdin.read(1).lower()
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return None
 
 console = Console()
 
@@ -35,17 +63,9 @@ CHANGELOG = {
 }
 
 def check_first_run():
-    config_dir = os.path.expanduser("~/.idm_cli")
-    os.makedirs(config_dir, exist_ok=True)
-    config_file = os.path.join(config_dir, "config.json")
-    
-    last_version = "0.0.0"
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, "r") as f:
-                last_version = json.load(f).get("last_version", "0.0.0")
-        except Exception:
-            pass
+    from idm_cli.config import load_config, save_config
+    config = load_config()
+    last_version = config.get("last_version", "0.0.0")
 
     if __version__ != last_version:
         if __version__ in CHANGELOG:
@@ -54,11 +74,8 @@ def check_first_run():
                 console.print(f"  [cyan]*[/cyan] {change}")
             console.print()
         
-        try:
-            with open(config_file, "w") as f:
-                json.dump({"last_version": __version__}, f)
-        except Exception:
-            pass
+        config["last_version"] = __version__
+        save_config(config)
 
 
 custom_style = questionary.Style([
@@ -89,9 +106,9 @@ async def progress_listener(queue: asyncio.Queue, progress: Progress, pause_even
                     progress.update(task.id, description=f"[bold yellow][WARNING: Press Ctrl+C again to cancel][/] {task.description}")
             warning_state["show"] = False
 
-        if pause_event and msvcrt:
-            if msvcrt.kbhit():
-                key = msvcrt.getch().decode('utf-8', 'ignore').lower()
+        if pause_event:
+            key = check_key_press()
+            if key:
                 if key == 'p' and pause_event.is_set():
                     pause_event.clear()
                     for task in progress.tasks:
