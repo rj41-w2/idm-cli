@@ -59,6 +59,10 @@ CHANGELOG = {
     ],
     "1.2.0": [
         "Added native support for winget install commands, enabling high-speed parallel downloads for Windows packages."
+    ],
+    "1.2.1": [
+        "Redesigned the interactive UI with a sleek cyan and white color scheme.",
+        "Enhanced terminal output formatting and progress bars for a professional experience."
     ]
 }
 
@@ -69,9 +73,9 @@ def check_first_run():
 
     if __version__ != last_version:
         if __version__ in CHANGELOG:
-            console.print(f"\n[bold magenta]*** What's New in v{__version__} ***[/bold magenta]")
+            console.print(f"\n[bold cyan]*** What's New in v{__version__} ***[/bold cyan]")
             for change in CHANGELOG[__version__]:
-                console.print(f"  [cyan]*[/cyan] {change}")
+                console.print(f"  [bold cyan]*[/bold cyan] {change}")
             console.print()
         
         config["last_version"] = __version__
@@ -80,11 +84,11 @@ def check_first_run():
 
 custom_style = questionary.Style([
     ('qmark', 'fg:cyan bold'),       
-    ('question', 'bold'),               
+    ('question', 'bold white'),               
     ('answer', 'fg:cyan bold'),      
     ('pointer', 'fg:cyan bold'),     
     ('highlighted', 'fg:cyan bold'), 
-    ('flags', 'fg:white'),
+    ('flags', 'fg:darkgray'),
 ])
 
 class IDMLexer(Lexer):

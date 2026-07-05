@@ -208,9 +208,9 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
     queue = asyncio.Queue()
 
     with Progress(
-        SpinnerColumn(),
+        SpinnerColumn("dots12"),
         TextColumn("[bold blue]{task.description}", justify="right"),
-        BarColumn(bar_width=40),
+        BarColumn(bar_width=40, complete_style="cyan", finished_style="bold green", pulse_style="bold white"),
         "[progress.percentage]{task.percentage:>3.1f}%",
         DownloadColumn(),
         TransferSpeedColumn(),
@@ -224,7 +224,7 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         else:
             video_task_ids = None
 
-        audio_task_id = progress.add_task("[magenta]Audio", total=None) if audio_url else None
+        audio_task_id = progress.add_task("[cyan]Audio", total=None) if audio_url else None
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 

@@ -5,6 +5,10 @@ import argparse
 import pyfiglet
 import questionary
 from typing import Optional
+from rich.panel import Panel
+from rich.align import Align
+from rich.text import Text
+from rich.table import Table
 
 from idm_cli.update_checker import check_for_updates
 from idm_cli import __version__
@@ -31,10 +35,10 @@ def download(
     """
     Download a YouTube video at maximum speed using parallel chunks.
     """
-    banner = pyfiglet.figlet_format("IDM  CLI")
-    console.print(f"[bold green]{banner}[/bold green]")
-    console.print(f"[bold cyan]--- The Ultimate High-Speed CLI Downloader --- [/bold cyan][dim cyan](v{__version__})[/dim cyan]")
-    console.print("      Type 'help' for available commands\n", style="white")
+    banner_text = pyfiglet.figlet_format("IDM  CLI", font="standard")
+    console.print(f"[bold cyan]{banner_text}[/bold cyan]")
+    console.print(f"  [bold white]--- The Ultimate High-Speed CLI Downloader ---[/bold white] [dim white](v{__version__})[/dim white]")
+    console.print("  [dim white]      Type 'help' for available commands[/dim white]\n")
     
     check_first_run()
     
@@ -110,20 +114,29 @@ def download(
             loop_quality = global_config.get("default_quality", "720p")
 
         if current_url.strip().lower() == "help":
-            console.print("\n[bold cyan] Available Commands:[/bold cyan]")
-            console.print("  [bold green]<URL>[/bold green]         - Paste any Video/File URL to download")
-            console.print("  [bold green]resume[/bold green]      - Resume or delete an incomplete download")
-            console.print("  [bold green]start queue[/bold green] - Start downloading queued files")
-            console.print("  [bold green]install extension[/bold green] - Guide to install Chrome/Edge extension")
-            console.print("  [bold green]help[/bold green]        - Show this help menu")
-            console.print("  [bold green]exit[/bold green]        - Exit the application")
+            table_cmds = Table(title="Available Commands", title_style="bold cyan", border_style="cyan", show_header=False, padding=(0, 2))
+            table_cmds.add_column("Command", style="cyan")
+            table_cmds.add_column("Description", style="white")
+            table_cmds.add_row("<URL>", "Paste any Video/File URL to download")
+            table_cmds.add_row("resume", "Resume or delete an incomplete download")
+            table_cmds.add_row("start queue", "Start downloading queued files")
+            table_cmds.add_row("install extension", "Guide to install Chrome/Edge extension")
+            table_cmds.add_row("help", "Show this help menu")
+            table_cmds.add_row("exit", "Exit the application")
             
-            console.print("\n[bold magenta]Fast Mode Flags (Skip Prompts):[/bold magenta]")
-            console.print("  [bold white]-q <res>[/bold white]    - Set quality (e.g., -q 1080p, -q 720p)")
-            console.print("  [bold white]-a[/bold white]          - Audio Only (Convert to MP3)")
-            console.print("  [bold white]-Q[/bold white]          - Add directly to Queue instead of downloading")
-            console.print("  [bold white]-c <num>[/bold white]    - Set number of parallel chunks (default: 8)")
-            console.print("\n  [dim italic]Example: https://youtube.com/... -q 1080p -Q[/dim italic]\n")
+            table_flags = Table(title="Fast Mode Flags (Skip Prompts)", title_style="bold cyan", border_style="cyan", show_header=False, padding=(0, 2))
+            table_flags.add_column("Flag", style="cyan")
+            table_flags.add_column("Description", style="white")
+            table_flags.add_row("-q <res>", "Set quality (e.g., -q 1080p, -q 720p)")
+            table_flags.add_row("-a", "Audio Only (Convert to MP3)")
+            table_flags.add_row("-Q", "Add directly to Queue instead of downloading")
+            table_flags.add_row("-c <num>", "Set number of parallel chunks (default: 8)")
+            
+            console.print("\n")
+            console.print(table_cmds)
+            console.print()
+            console.print(table_flags)
+            console.print("\n  [dim white]Example: https://youtube.com/... -q 1080p -Q[/dim white]\n")
             if not is_interactive:
                 raise typer.Exit()
             current_url = None

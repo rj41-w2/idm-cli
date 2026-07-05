@@ -15,7 +15,7 @@ A lightning-fast, powerful, and universal command-line download manager written 
 - **Pristine Downloads Folder:** All temporary chunks and raw media files are kept hidden in `~/.idm_cli/tmp/`. Only the fully assembled, 100% complete files are moved to your `~/Downloads` folder.
 - **Smart Auto-Update:** Once a day, IDM-CLI automatically checks the PyPI database in the background. If a new version is available, it handles the `pip install --upgrade` process for you seamlessly!
 - **Browser Extension Integration:** Automatically intercept downloads from Chrome and Edge and route them directly into the IDM-CLI high-speed downloader!
-- **Interactive UI:** A beautiful, responsive terminal interface powered by `rich` and `questionary` with real-time speed, ETA, and progress bars.
+- **Interactive UI:** A beautiful, modern, and sleek cyan/white terminal interface powered by `rich` and `questionary` with real-time speed, ETA, and progress bars.
 - **Pause & Play:** Press `p` to pause the active downloads without losing progress, and `r` to resume them.
 
 ## 🛠️ Prerequisites
