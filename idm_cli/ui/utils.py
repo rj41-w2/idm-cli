@@ -43,26 +43,11 @@ def check_key_press():
 console = Console()
 
 CHANGELOG = {
-    "1.1.6": [
-        "Replaced autocomplete with text prompt for improved user input handling.",
-        "Enhanced update prompt for better user experience.",
-        "Enhanced download_media function to accept media_type parameter and improved console output.",
-        "Enhanced video info extraction for Facebook and Instagram, and improved error handling for FFmpeg in muxer."
-    ],
-    "1.1.8": [
-        "Added a new browser extension for capturing downloads seamlessly.",
-        "Fixed minor bugs and improved overall stability."
-    ],
-    "1.1.9": [
-        "Added Cross-Platform support: IDM-CLI extension now natively installs on Windows, macOS, and Linux.",
-        "Refactored extension installation logic for better OS compatibility."
-    ],
-    "1.2.0": [
-        "Added native support for winget install commands, enabling high-speed parallel downloads for Windows packages."
-    ],
-    "1.2.1": [
-        "Redesigned the interactive UI with a sleek cyan and white color scheme.",
-        "Enhanced terminal output formatting and progress bars for a professional experience."
+    "1.2.2": [
+        "Fixed an issue where resuming a download could result in a corrupted video file.",
+        "Switched FFmpeg automatic download to high-speed GitHub releases (BtbN builds) for maximum bandwidth.",
+        "Added a new option to seamlessly install FFmpeg via winget for Windows users.",
+        "Improved downloader stability by automatically recovering from YouTube network throttling or silent disconnects."
     ]
 }
 

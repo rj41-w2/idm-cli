@@ -78,8 +78,19 @@ def get_video_resolutions(info: dict) -> list[dict]:
             resolutions[height] = {
                 'resolution': res_str,
                 'display_label': display_label,
-                'format_id': fmt_id
+                'format_id': fmt_id,
+                'pre_muxed': fmt.get('acodec') != 'none'
             }
+        else:
+            # If we already have this resolution, but the new one is pre_muxed, prefer it!
+            # Or if it's higher quality.
+            if fmt.get('acodec') != 'none' and not resolutions[height]['pre_muxed']:
+                resolutions[height] = {
+                    'resolution': res_str,
+                    'display_label': display_label,
+                    'format_id': fmt_id,
+                    'pre_muxed': True
+                }
             
     # Sort by height descending
     sorted_heights = sorted(resolutions.keys(), reverse=True)
@@ -99,24 +110,26 @@ def extract_urls(info: dict, video_format_id: str) -> dict:
     audio_url = None
     
     # Find video
+    video_has_audio = False
     if video_format_id != "audio_only":
         for fmt in formats:
             if str(fmt.get('format_id')) == str(video_format_id):
                 video_url = fmt.get('url')
                 if fmt.get('http_headers'):
                     headers.update(fmt.get('http_headers'))
+                video_has_audio = fmt.get('acodec') != 'none'
                 break
             
-    # Find best audio (yt-dlp normally sorts formats from worst to best overall, 
-    # but let's just find the last one that is audio-only, or sort by abr)
-    audio_formats = [f for f in formats if f.get('vcodec') == 'none' and f.get('acodec') != 'none']
-    if audio_formats:
-        # Sort by audio bitrate if available
-        audio_formats.sort(key=lambda x: x.get('abr', 0) or 0)
-        best_audio = audio_formats[-1]
-        audio_url = best_audio.get('url')
-        if best_audio.get('http_headers'):
-            headers.update(best_audio.get('http_headers'))
+    # Find best audio ONLY if the video doesn't already have audio
+    if not video_has_audio:
+        audio_formats = [f for f in formats if f.get('vcodec') == 'none' and f.get('acodec') != 'none']
+        if audio_formats:
+            # Sort by audio bitrate if available
+            audio_formats.sort(key=lambda x: x.get('abr', 0) or 0)
+            best_audio = audio_formats[-1]
+            audio_url = best_audio.get('url')
+            if best_audio.get('http_headers'):
+                headers.update(best_audio.get('http_headers'))
             
     return {
         'video_url': video_url,

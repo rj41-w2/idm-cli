@@ -12,7 +12,7 @@ from rich.progress import (
     DownloadColumn,
     TransferSpeedColumn
 )
-from idm_cli.utils import console, progress_listener
+from idm_cli.ui.utils import console, progress_listener
 from idm_cli.config import logger
 
 async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None, chunk_progress: dict = None):
@@ -118,28 +118,43 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
     file_size = None
     
     try:
-        async with session.head(url, headers=headers, allow_redirects=True) as response:
-            content_length = response.headers.get('Content-Length')
-            if content_length:
-                file_size = int(content_length)
+        range_headers = headers.copy()
+        range_headers['Range'] = 'bytes=0-0'
+        async with session.get(url, headers=range_headers, allow_redirects=True) as response:
+            response.raise_for_status()
+            content_range = response.headers.get('Content-Range')
+            if content_range and '/' in content_range:
+                file_size = int(content_range.split('/')[-1])
+            else:
+                content_length = response.headers.get('Content-Length')
+                if content_length:
+                    file_size = int(content_length)
     except aiohttp.ClientError:
         pass
-        
+
     if not file_size:
         try:
-            range_headers = headers.copy()
-            range_headers['Range'] = 'bytes=0-0'
-            async with session.get(url, headers=range_headers, allow_redirects=True) as response:
-                content_range = response.headers.get('Content-Range')
-                if content_range and '/' in content_range:
-                    file_size = int(content_range.split('/')[-1])
-                else:
-                    content_length = response.headers.get('Content-Length')
-                    if content_length:
-                        file_size = int(content_length)
+            async with session.head(url, headers=headers, allow_redirects=True) as response:
+                response.raise_for_status()
+                content_length = response.headers.get('Content-Length')
+                if content_length:
+                    file_size = int(content_length)
         except aiohttp.ClientError:
             pass
             
+    if file_size and chunk_progress:
+        total_existing = sum(chunk_progress.values())
+        file_size_changed = os.path.exists(dest_path) and os.path.getsize(dest_path) != file_size
+        
+        if total_existing > file_size or file_size_changed:
+            chunk_progress = {}
+            if os.path.exists(progress_file):
+                try: os.remove(progress_file)
+                except OSError: pass
+            if os.path.exists(dest_path):
+                try: os.remove(dest_path)
+                except OSError: pass
+
     if file_size and not os.path.exists(dest_path):
         async with aiofiles.open(dest_path, 'wb') as f:
             await f.truncate(file_size)
@@ -217,18 +232,13 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
         TimeRemainingColumn(),
         console=console
     ) as progress:
-        video_task_ids = []
-        if video_url:
-            for i in range(chunks):
-                video_task_ids.append(progress.add_task(f"[cyan]{media_type} Chunk {i+1}/{chunks}", total=None))
-        else:
-            video_task_ids = None
+        video_task_ids = progress.add_task(f"[cyan]{media_type}", total=None) if video_url else None
 
         audio_task_id = progress.add_task("[cyan]Audio", total=None) if audio_url else None
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None), connector=aiohttp.TCPConnector(limit=0)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_read=10), connector=aiohttp.TCPConnector(limit=0)) as session:
             v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_ids, pause_event)) if video_url else None
             a_task = asyncio.create_task(download_file(session, audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
     

@@ -3,12 +3,12 @@ import asyncio
 import shutil
 import typer
 import questionary
-from idm_cli.state import get_incomplete_downloads, remove_download
+from idm_cli.downloader.state import get_incomplete_downloads, remove_download
 from idm_cli.extractors import get_extractor
-from idm_cli.downloader import download_media
-from idm_cli.muxer import mux_audio_video, convert_to_mp3
-from idm_cli.utils import console, custom_style
-from idm_cli.daemon import acquire_lock, release_lock
+from idm_cli.downloader.downloader import download_media
+from idm_cli.downloader.muxer import mux_audio_video, convert_to_mp3
+from idm_cli.ui.utils import console, custom_style
+from idm_cli.extension.daemon import acquire_lock, release_lock
 from idm_cli.config import logger
 
 def handle_queue(is_interactive: bool, loop_chunks: int):

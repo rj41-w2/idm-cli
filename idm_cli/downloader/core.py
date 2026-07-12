@@ -6,11 +6,11 @@ import time
 import shutil
 import typer
 import questionary
-from idm_cli.state import save_download, remove_download, get_incomplete_downloads
+from idm_cli.downloader.state import save_download, remove_download, get_incomplete_downloads
 from idm_cli.extractors import get_extractor
-from idm_cli.downloader import download_media
-from idm_cli.muxer import mux_audio_video, convert_to_mp3
-from idm_cli.utils import console, custom_style, sanitize_filename
+from idm_cli.downloader.downloader import download_media
+from idm_cli.downloader.muxer import mux_audio_video, convert_to_mp3
+from idm_cli.ui.utils import console, custom_style, sanitize_filename
 from idm_cli.config import logger
 
 def process_download(
@@ -105,9 +105,55 @@ def process_download(
 
             selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
             format_id = selected_format['format_id']
+            needs_ffmpeg = not selected_format.get('pre_muxed', True)
+        else:
+            needs_ffmpeg = True if format_id == "audio_only" else False
         
         safe_title = sanitize_filename(title)
         from idm_cli.config import load_config
+        from idm_cli.downloader.muxer import get_ffmpeg_path, download_ffmpeg
+        
+        if needs_ffmpeg and not get_ffmpeg_path():
+            console.print("[bold yellow]High quality video/audio processing requires FFmpeg.[/]")
+            if not is_interactive:
+                download_method = "auto"
+            else:
+                download_method = questionary.select(
+                    "How do you want to install FFmpeg?",
+                    choices=[
+                        questionary.Choice("Download automatically (approx 168MB, High-Speed)", "auto"),
+                        questionary.Choice("Install via winget (Windows Package Manager, approx 131MB download)", "winget"),
+                        questionary.Choice("Cancel download", "cancel")
+                    ]
+                ).ask()
+                
+            if download_method == "auto":
+                try:
+                    asyncio.run(download_ffmpeg())
+                except Exception as e:
+                    console.print(f"[bold red]Failed to download FFmpeg:[/] {e}")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    return False
+            elif download_method == "winget":
+                try:
+                    with console.status("[bold cyan]Installing FFmpeg via winget...", spinner="dots"):
+                        import subprocess
+                        subprocess.run(["winget", "install", "ffmpeg", "--accept-package-agreements", "--accept-source-agreements"], check=True)
+                    console.print("[bold green]FFmpeg installed successfully via winget![/]")
+                    console.print("[bold yellow]Please restart your terminal/command prompt to apply the PATH changes and run your command again.[/]")
+                    raise typer.Exit(code=0)
+                except Exception as e:
+                    console.print(f"[bold red]Failed to install via winget:[/] {e}")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    return False
+            else:
+                console.print("[bold red]Cannot continue without FFmpeg. Please select a lower quality (like 360p)[/]")
+                if not is_interactive:
+                    raise typer.Exit(code=1)
+                return False
+                
         config = load_config()
         downloads_dir = config.get("download_dir", os.path.join(os.path.expanduser("~"), "Downloads"))
         os.makedirs(downloads_dir, exist_ok=True)

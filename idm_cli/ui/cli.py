@@ -12,10 +12,10 @@ from rich.table import Table
 
 from idm_cli.update_checker import check_for_updates
 from idm_cli import __version__
-from idm_cli.utils import console, custom_style, IDMLexer, check_first_run
-from idm_cli.extension import install_extension
-from idm_cli.handlers import handle_queue, handle_resume
-from idm_cli.core import process_download
+from idm_cli.ui.utils import console, custom_style, IDMLexer, check_first_run
+from idm_cli.extension.extension import install_extension
+from idm_cli.downloader.handlers import handle_queue, handle_resume
+from idm_cli.downloader.core import process_download
 from idm_cli.config import load_config
 
 global_config = load_config()

@@ -4,7 +4,7 @@ import shutil
 import sys
 import platform
 import questionary
-from idm_cli.utils import console, custom_style
+from idm_cli.ui.utils import console, custom_style
 from idm_cli.config import logger
 
 def install_extension():
@@ -80,7 +80,7 @@ def install_extension():
         import winreg
         bat_path = os.path.join(base_dir, 'native_host.bat')
         with open(bat_path, 'w') as f:
-            f.write(f"@echo off\n{sys.executable} -m idm_cli.native_host\n")
+            f.write(f"@echo off\n{sys.executable} -m idm_cli.extension.native_host\n")
             
         manifest_path = os.path.join(base_dir, 'com.idm.cli.json')
         manifest = {
@@ -115,7 +115,7 @@ def install_extension():
     else:
         sh_path = os.path.join(base_dir, 'native_host.sh')
         with open(sh_path, 'w') as f:
-            f.write(f"#!/bin/bash\n{sys.executable} -m idm_cli.native_host\n")
+            f.write(f"#!/bin/bash\n{sys.executable} -m idm_cli.extension.native_host\n")
         os.chmod(sh_path, 0o755)
 
         manifest_path = os.path.join(base_dir, 'com.idm.cli.json')

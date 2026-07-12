@@ -40,7 +40,7 @@ setup(
     python_requires=">=3.8",
     entry_points={
         "console_scripts": [
-            "idm=idm_cli.cli:app",
+            "idm=idm_cli.ui.cli:app",
         ],
     },
 )

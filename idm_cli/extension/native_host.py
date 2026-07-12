@@ -42,7 +42,7 @@ def main():
             elif action == "download":
                 quality = message.get("quality")
                 filename_opt = message.get("filename")
-                cmd = [sys.executable, '-m', 'idm_cli.cli', url, '-Q']
+                cmd = [sys.executable, '-m', 'idm_cli.ui.cli', url, '-Q']
                 if quality:
                     cmd.extend(['-q', quality])
                 if filename_opt:
@@ -58,10 +58,10 @@ def main():
                     except Exception:
                         pass
                 
-                from idm_cli.daemon import is_daemon_running
+                from idm_cli.extension.daemon import is_daemon_running
                 if not is_daemon_running():
                     # Launch visible terminal worker using python module
-                    worker_cmd = [sys.executable, '-m', 'idm_cli.cli', 'start queue']
+                    worker_cmd = [sys.executable, '-m', 'idm_cli.ui.cli', 'start queue']
                     subprocess.Popen(worker_cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                     
                 send_message({"status": "success"})
