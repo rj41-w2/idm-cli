@@ -93,14 +93,15 @@ def process_download(
                 else:
                     selected_res = resolutions[0]['resolution']
             else:
-                choices = [r['resolution'] for r in resolutions]
+                choices = [r.get('display_label', r['resolution']) for r in resolutions]
                 prompt_text = "Choose video quality:" if format_id != "direct_file" else "Choose download option:"
-                selected_res = questionary.select(prompt_text, choices=choices, style=custom_style).ask(kbi_msg="")
-                if not selected_res:
+                selected_display = questionary.select(prompt_text, choices=choices, style=custom_style).ask(kbi_msg="")
+                if not selected_display:
                     console.print("[bold red]Cancelled by user[/bold red]")
                     if not is_interactive:
                         raise typer.Exit(code=1)
                     return False
+                selected_res = next(r['resolution'] for r in resolutions if r.get('display_label', r['resolution']) == selected_display)
 
             selected_format = next(r for r in resolutions if r['resolution'] == selected_res)
             format_id = selected_format['format_id']

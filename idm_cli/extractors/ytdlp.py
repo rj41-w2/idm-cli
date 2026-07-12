@@ -65,10 +65,19 @@ def get_video_resolutions(info: dict) -> list[dict]:
         res_str = f"{height}p"
         fmt_id = fmt.get('format_id')
         
+        # Calculate size string
+        filesize = fmt.get('filesize') or fmt.get('filesize_approx')
+        if filesize:
+            size_mb = filesize / 1024 / 1024
+            display_label = f"{height}p ({size_mb:.1f} MB)"
+        else:
+            display_label = f"{height}p"
+        
         # Keep track of resolutions we've seen.
         if height not in resolutions:
             resolutions[height] = {
                 'resolution': res_str,
+                'display_label': display_label,
                 'format_id': fmt_id
             }
             

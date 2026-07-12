@@ -7,7 +7,7 @@ def fetch_all_info(url: str) -> dict:
 
 def get_video_resolutions(info: dict) -> list[dict]:
     """Returns a dummy resolution for direct files."""
-    return [{"resolution": "Direct File", "format_id": "direct_file"}]
+    return [{"resolution": "Direct File", "display_label": "Direct File", "format_id": "direct_file"}]
 
 def extract_urls(info: dict, video_format_id: str) -> dict:
     """Extracts download URLs."""

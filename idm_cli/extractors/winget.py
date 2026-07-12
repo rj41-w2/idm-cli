@@ -54,7 +54,7 @@ def fetch_all_info(url: str) -> dict:
         raise Exception(f"Winget extractor error: {str(e)}")
 
 def get_video_resolutions(info: dict) -> list[dict]:
-    return [{"resolution": "Direct File", "format_id": "direct_file"}]
+    return [{"resolution": "Direct File", "display_label": "Direct File", "format_id": "direct_file"}]
 
 def extract_urls(info: dict, video_format_id: str) -> dict:
     return {
