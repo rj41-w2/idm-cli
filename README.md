@@ -1,8 +1,22 @@
-# IDM-CLI (Internet Download Manager CLI)
+<div align="center">
 
-*Inspired by the official [Internet Download Manager (IDM)](https://www.internetdownloadmanager.com/)*
+<h1>IDM-CLI</h1>
 
-A lightning-fast, cross-platform command-line download manager written in Python. IDM-CLI splits files into multiple parallel chunks (default 8, up to 32) to maximize your internet speed. It supports downloading from **YouTube**, **Facebook**, **Instagram**, and any **Direct File URL** (`.exe`, `.zip`, `.pdf`, etc.).
+**A lightning-fast, cross-platform command-line download manager written in Python.**
+
+*The official IDM asks you to pay after 30 days — IDM-CLI is 100% free, open-source, and yours to modify!*
+
+[![PyPI version](https://img.shields.io/pypi/v/idm-cli?color=blue&label=pypi%20version)](https://pypi.org/project/idm-cli/)
+[![Downloads](https://static.pepy.tech/badge/idm-cli)](https://pepy.tech/project/idm-cli)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/rj41-w2/idm-cli/blob/main/LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+[![Install](https://img.shields.io/badge/install-pip%20install%20idm--cli-brightgreen)](https://pypi.org/project/idm-cli/)
+
+[Download via PyPI](https://pypi.org/project/idm-cli/) · [Report a Bug](https://github.com/rj41-w2/idm-cli/issues)
+
+</div>
+
+IDM-CLI splits files into multiple parallel chunks (default 8, up to 32) to maximize your internet speed. It supports downloading from **YouTube**, **Facebook**, **Instagram**, and any **Direct File URL** (`.exe`, `.zip`, `.pdf`, etc.).
 
 ## Features
 
