@@ -2,12 +2,44 @@ import sys
 import json
 import struct
 import subprocess
+import re
+import os
+import platform
+
+ALLOWED_SCHEMES = ("http://", "https://", "www.")
+ALLOWED_QUALITY = re.compile(r"^\d{3,4}p$")
+ALLOWED_FILENAME = re.compile(r'^[^<>:"/\\|?*\x00-\x1f]{1,200}$')
+MAX_MESSAGE_SIZE = 1024 * 1024
+
+def is_valid_url(url: str) -> bool:
+    lower = url.strip().lower()
+    if not lower.startswith(ALLOWED_SCHEMES):
+        return False
+    if "javascript:" in lower or "data:" in lower or "file://" in lower:
+        return False
+    if len(url) > 2048:
+        return False
+    return True
+
+def is_valid_quality(quality: str) -> bool:
+    return bool(quality) and bool(ALLOWED_QUALITY.match(quality))
+
+def is_valid_filename(filename: str) -> bool:
+    if not filename or len(filename) > 200:
+        return False
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return False
+    return bool(ALLOWED_FILENAME.match(filename))
 
 def read_message():
     raw_length = sys.stdin.buffer.read(4)
     if len(raw_length) == 0:
         sys.exit(0)
+    if len(raw_length) < 4:
+        sys.exit(1)
     message_length = struct.unpack('I', raw_length)[0]
+    if message_length > MAX_MESSAGE_SIZE:
+        sys.exit(1)
     message = sys.stdin.buffer.read(message_length).decode('utf-8')
     return json.loads(message)
 
@@ -22,10 +54,14 @@ def main():
         try:
             message = read_message()
             action = message.get("action")
-            url = message.get("url")
+            url = message.get("url", "").strip()
 
             if not url:
                 send_message({"status": "error", "message": "No URL provided"})
+                continue
+
+            if not is_valid_url(url):
+                send_message({"status": "error", "message": "Invalid or unsafe URL."})
                 continue
 
             if action == "fetch_qualities":
@@ -42,36 +78,46 @@ def main():
             elif action == "download":
                 quality = message.get("quality")
                 filename_opt = message.get("filename")
-                cmd = [sys.executable, '-m', 'idm_cli.ui.cli', url, '-Q']
+
+                if quality and not is_valid_quality(quality):
+                    send_message({"status": "error", "message": "Invalid quality parameter."})
+                    continue
+
+                if filename_opt and not is_valid_filename(filename_opt):
+                    send_message({"status": "error", "message": "Invalid filename parameter."})
+                    continue
+
+                cmd = [sys.executable, '-m', 'idm_cli.ui.cli', '--', url, '-Q']
                 if quality:
                     cmd.extend(['-q', quality])
                 if filename_opt:
                     cmd.extend(['-f', filename_opt])
                 
-                # Run synchronously to add to queue. Catch output to protect Native Messaging protocol.
-                import os
                 result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
                     try:
-                        with open(os.path.expanduser("~/.idm_cli/error.log"), "a") as f:
+                        from idm_cli.config import CONFIG_DIR
+                        with open(os.path.join(CONFIG_DIR, "error.log"), "a") as f:
                             f.write(f"Failed to queue: {url}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n---\n")
-                    except Exception:
+                    except OSError:
                         pass
                 
                 from idm_cli.extension.daemon import is_daemon_running
                 if not is_daemon_running():
-                    # Launch visible terminal worker using python module
                     worker_cmd = [sys.executable, '-m', 'idm_cli.ui.cli', 'start queue']
-                    subprocess.Popen(worker_cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    if platform.system() == "Windows":
+                        subprocess.Popen(worker_cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    else:
+                        subprocess.Popen(worker_cmd)
                     
                 send_message({"status": "success"})
             else:
                 send_message({"status": "error", "message": "Unknown action"})
 
+        except json.JSONDecodeError:
+            send_message({"status": "error", "message": "Invalid JSON message."})
         except Exception as e:
-            # For native messaging, if we crash or fail, we can optionally send an error back,
-            # but Chrome might kill us before it's read.
-            send_message({"status": "error", "message": str(e)})
+            send_message({"status": "error", "message": "An internal error occurred."})
             sys.exit(1)
 
 if __name__ == '__main__':

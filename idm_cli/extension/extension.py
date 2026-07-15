@@ -9,7 +9,8 @@ from idm_cli.config import logger
 
 def install_extension():
     src_ext_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'browser_extension'))
-    base_dir = os.path.expanduser('~/.idm_cli')
+    from idm_cli.config import CONFIG_DIR
+    base_dir = CONFIG_DIR
     dest_ext_path = os.path.join(base_dir, 'browser_extension')
     
     is_updated = False

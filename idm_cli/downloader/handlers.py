@@ -84,6 +84,10 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
                 console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
             except KeyboardInterrupt:
                 break
+            except ConnectionError as e:
+                console.print(f"\n[bold red]{e}[/]")
+                logger.error(f"Connection failed for {data['title']}: {e}")
+                break
             except (ValueError, TypeError, OSError) as e:
                 logger.error(f"Download failed: {e}")
                 console.print(f"[bold red]Download failed:[/] {e}")

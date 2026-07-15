@@ -12,7 +12,7 @@ from rich.table import Table
 
 from idm_cli.update_checker import check_for_updates
 from idm_cli import __version__
-from idm_cli.ui.utils import console, custom_style, IDMLexer, check_first_run
+from idm_cli.ui.utils import console, custom_style, IDMLexer, check_first_run, is_valid_url
 from idm_cli.extension.extension import install_extension
 from idm_cli.downloader.handlers import handle_queue, handle_resume
 from idm_cli.downloader.core import process_download
@@ -46,6 +46,11 @@ def download(
         check_for_updates()
     except Exception:
         pass
+
+    if url and not url.strip().lower().startswith("winget ") and not is_valid_url(url):
+        console.print(f"[bold red]Invalid or unsafe URL:[/] {url.strip()}")
+        console.print("[dim white]Only HTTP/HTTPS URLs are allowed.[/dim white]")
+        raise typer.Exit(code=1)
 
     is_interactive = (url is None)
     last_ctrl_c_time = 0
@@ -86,7 +91,8 @@ def download(
 
         if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume", "install extension"] and not current_url.strip().lower().startswith("winget "):
             try:
-                parts = shlex.split(current_url)
+                import platform as _platform
+                parts = shlex.split(current_url, posix=(_platform.system() != "Windows"))
                 parser = argparse.ArgumentParser(add_help=False)
                 parser.add_argument('-q', '--quality')
                 parser.add_argument('-a', '--audio-only', action='store_true')
@@ -108,6 +114,18 @@ def download(
                     current_url = urls[0]
             except Exception:
                 pass
+
+        if is_interactive and current_url:
+            lower = current_url.strip().lower()
+            is_url = lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
+            is_known_cmd = lower in ["help", "exit", "start queue", "queue start", "resume", "install extension"]
+            is_winget = lower.startswith("winget ")
+            is_flag_only = lower.startswith("-")
+            if not is_url and not is_known_cmd and not is_winget and not is_flag_only:
+                console.print(f"[bold red]Unknown command:[/] {current_url.strip()}")
+                console.print("[dim white]Type 'help' to see available commands.[/dim white]\n")
+                current_url = None
+                continue
 
         fast_mode = not is_interactive or loop_quality or loop_audio_only or loop_video_only or loop_queue
         if fast_mode and not loop_quality and not loop_audio_only:
@@ -175,6 +193,12 @@ def download(
                 found_task_id=found_task_id,
                 found_task_data=found_task_data
             )
+            current_url = None
+            continue
+
+        if current_url and not current_url.strip().lower().startswith("winget ") and not is_valid_url(current_url):
+            console.print(f"[bold red]Invalid or unsafe URL:[/] {current_url.strip()}")
+            console.print("[dim white]Only HTTP/HTTPS URLs are allowed.[/dim white]\n")
             current_url = None
             continue
             

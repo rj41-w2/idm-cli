@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 import logging
 import shutil
@@ -8,51 +9,96 @@ from idm_cli.ui.utils import console
 
 logger = logging.getLogger(__name__)
 
+_system = platform.system()
+_is_windows = _system == "Windows"
+
+def _ffmpeg_binary_name() -> str:
+    return "ffmpeg.exe" if _is_windows else "ffmpeg"
+
+def _ffmpeg_install_hint() -> str:
+    if _is_windows:
+        return "Run 'winget install ffmpeg' in your terminal to install it, then restart the app."
+    elif _system == "Darwin":
+        return "Run 'brew install ffmpeg' in your terminal to install it, then restart the app."
+    else:
+        return "Run 'sudo apt install ffmpeg' or 'sudo dnf install ffmpeg' in your terminal to install it, then restart the app."
+
 def get_ffmpeg_path() -> str:
     sys_path = shutil.which("ffmpeg")
     if sys_path:
         return sys_path
     
-    local_path = os.path.expanduser("~/.idm_cli/bin/ffmpeg.exe")
+    from idm_cli.config import CONFIG_DIR
+    bin_name = _ffmpeg_binary_name()
+    local_path = os.path.join(CONFIG_DIR, "bin", bin_name)
     if os.path.exists(local_path):
         return local_path
         
     return None
 
 async def download_ffmpeg() -> str:
-    url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-    bin_dir = os.path.expanduser("~/.idm_cli/bin")
+    from idm_cli.config import CONFIG_DIR
+    if _is_windows:
+        url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+    elif _system == "Darwin":
+        url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macos64-gpl.zip"
+    else:
+        url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+
+    bin_dir = os.path.join(CONFIG_DIR, "bin")
     os.makedirs(bin_dir, exist_ok=True)
-    zip_path = os.path.join(bin_dir, "ffmpeg.zip")
-    
+
     from idm_cli.downloader.downloader import download_media
     import asyncio
-    
+
     pause_event = asyncio.Event()
     pause_event.set()
-    
+
+    if _is_windows:
+        archive_path = os.path.join(bin_dir, "ffmpeg.zip")
+    else:
+        archive_path = os.path.join(bin_dir, "ffmpeg.tar.xz")
+
     await download_media(
         video_url=url,
         audio_url=None,
         headers={},
         chunks=8,
-        video_dest=zip_path,
+        video_dest=archive_path,
         audio_dest="",
         pause_event=pause_event,
         warning_state=None,
         media_type="FFmpeg (Essentials)"
     )
-                        
+
+    bin_name = _ffmpeg_binary_name()
+
     with console.status("[bold cyan]Extracting FFmpeg...", spinner="dots"):
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            for file_info in zip_ref.infolist():
-                if file_info.filename.endswith("ffmpeg.exe"):
-                    with zip_ref.open(file_info) as source, open(os.path.join(bin_dir, "ffmpeg.exe"), "wb") as target:
-                        shutil.copyfileobj(source, target)
-                    break
-        os.remove(zip_path)
-    
-    return os.path.join(bin_dir, "ffmpeg.exe")
+        if _is_windows:
+            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                for file_info in zip_ref.infolist():
+                    if file_info.filename.endswith("ffmpeg.exe"):
+                        with zip_ref.open(file_info) as source, open(os.path.join(bin_dir, bin_name), "wb") as target:
+                            shutil.copyfileobj(source, target)
+                        break
+        else:
+            import tarfile
+            with tarfile.open(archive_path, 'r:xz') as tar_ref:
+                for member in tar_ref.getmembers():
+                    if member.name.endswith("ffmpeg") and not member.isdir():
+                        member.name = bin_name
+                        tar_ref.extract(member, bin_dir)
+                        break
+        try:
+            os.remove(archive_path)
+        except OSError:
+            pass
+
+    ffmpeg_path = os.path.join(bin_dir, bin_name)
+    if not _is_windows:
+        os.chmod(ffmpeg_path, 0o755)
+
+    return ffmpeg_path
 
 def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
     """
@@ -71,7 +117,7 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
 
     cmd = [
         ffmpeg_bin,
-        "-y",  # Overwrite output file if it exists
+        "-y",
         "-i", video_path,
         "-i", audio_path,
         "-c", "copy",
@@ -93,7 +139,7 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
         logger.error(f"FFmpeg muxing failed: {e.stderr.decode('utf-8', errors='replace')}")
         raise RuntimeError(f"FFmpeg muxing failed: {e}")
     except FileNotFoundError:
-        raise RuntimeError("FFmpeg is not installed! Please run 'winget install ffmpeg' in your terminal to install it, then restart the app.")
+        raise RuntimeError(f"FFmpeg is not installed! {_ffmpeg_install_hint()}")
 
 def convert_to_mp3(audio_path: str, output_path: str) -> None:
     """
@@ -130,4 +176,4 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
         logger.error(f"FFmpeg conversion failed: {e.stderr.decode('utf-8', errors='replace')}")
         raise RuntimeError(f"FFmpeg conversion failed: {e}")
     except FileNotFoundError:
-        raise RuntimeError("FFmpeg is not installed! Please run 'winget install ffmpeg' in your terminal to install it, then restart the app.")
+        raise RuntimeError(f"FFmpeg is not installed! {_ffmpeg_install_hint()}")

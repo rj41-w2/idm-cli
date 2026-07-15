@@ -1,13 +1,41 @@
 import os
 import json
+import platform
+import shutil
 import logging
 from logging.handlers import RotatingFileHandler
+from platformdirs import user_data_dir, user_downloads_dir
 
-CONFIG_DIR = os.path.expanduser("~/.idm_cli")
+APP_NAME = "idm-cli"
+APP_AUTHOR = "idm-cli"
+CONFIG_DIR = user_data_dir(APP_NAME, APP_AUTHOR)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 LOG_FILE = os.path.join(CONFIG_DIR, "idm.log")
 
+def _migrate_old_config():
+    old_dir = os.path.expanduser("~/.idm_cli")
+    if old_dir == CONFIG_DIR:
+        return
+    if not os.path.isdir(old_dir):
+        return
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    for item in os.listdir(old_dir):
+        src = os.path.join(old_dir, item)
+        dst = os.path.join(CONFIG_DIR, item)
+        if not os.path.exists(dst):
+            try:
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+            except OSError:
+                pass
+
+def _get_default_download_dir() -> str:
+    return user_downloads_dir()
+
 def setup_logging():
+    _migrate_old_config()
     os.makedirs(CONFIG_DIR, exist_ok=True)
     logger = logging.getLogger("idm_cli")
     logger.setLevel(logging.DEBUG)
@@ -23,7 +51,7 @@ logger = setup_logging()
 DEFAULT_CONFIG = {
     "default_chunks": 8,
     "default_quality": "720p",
-    "download_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
+    "download_dir": _get_default_download_dir(),
     "last_version": "0.0.0"
 }
 

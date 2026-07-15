@@ -118,13 +118,22 @@ def process_download(
             if not is_interactive:
                 download_method = "auto"
             else:
+                import platform as _platform
+                _sys = _platform.system()
+                choices = [
+                    questionary.Choice("Download automatically (approx 168MB, High-Speed)", "auto"),
+                    questionary.Choice("Cancel download", "cancel")
+                ]
+                if _sys == "Windows":
+                    choices.insert(1, questionary.Choice("Install via winget (Windows Package Manager, approx 131MB download)", "winget"))
+                elif _sys == "Darwin":
+                    choices.insert(1, questionary.Choice("Install via brew (Homebrew, macOS)", "brew"))
+                else:
+                    choices.insert(1, questionary.Choice("Install via apt (Linux Package Manager)", "apt"))
+
                 download_method = questionary.select(
                     "How do you want to install FFmpeg?",
-                    choices=[
-                        questionary.Choice("Download automatically (approx 168MB, High-Speed)", "auto"),
-                        questionary.Choice("Install via winget (Windows Package Manager, approx 131MB download)", "winget"),
-                        questionary.Choice("Cancel download", "cancel")
-                    ]
+                    choices=choices
                 ).ask()
                 
             if download_method == "auto":
@@ -139,12 +148,36 @@ def process_download(
                 try:
                     with console.status("[bold cyan]Installing FFmpeg via winget...", spinner="dots"):
                         import subprocess
-                        subprocess.run(["winget", "install", "ffmpeg", "--accept-package-agreements", "--accept-source-agreements"], check=True)
+                        subprocess.run(["winget", "install", "ffmpeg", "--accept-package-agreements", "--accept-source-agreements"], check=True, shell=False, timeout=120)
                     console.print("[bold green]FFmpeg installed successfully via winget![/]")
                     console.print("[bold yellow]Please restart your terminal/command prompt to apply the PATH changes and run your command again.[/]")
                     raise typer.Exit(code=0)
                 except Exception as e:
                     console.print(f"[bold red]Failed to install via winget:[/] {e}")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    return False
+            elif download_method == "brew":
+                try:
+                    with console.status("[bold cyan]Installing FFmpeg via brew...", spinner="dots"):
+                        import subprocess
+                        subprocess.run(["brew", "install", "ffmpeg"], check=True, shell=False, timeout=120)
+                    console.print("[bold green]FFmpeg installed successfully via brew![/]")
+                    raise typer.Exit(code=0)
+                except Exception as e:
+                    console.print(f"[bold red]Failed to install via brew:[/] {e}")
+                    if not is_interactive:
+                        raise typer.Exit(code=1)
+                    return False
+            elif download_method == "apt":
+                try:
+                    with console.status("[bold cyan]Installing FFmpeg via apt...", spinner="dots"):
+                        import subprocess
+                        subprocess.run(["sudo", "apt", "install", "-y", "ffmpeg"], check=True, shell=False, timeout=120)
+                    console.print("[bold green]FFmpeg installed successfully via apt![/]")
+                    raise typer.Exit(code=0)
+                except Exception as e:
+                    console.print(f"[bold red]Failed to install via apt:[/] {e}")
                     if not is_interactive:
                         raise typer.Exit(code=1)
                     return False
@@ -155,10 +188,12 @@ def process_download(
                 return False
                 
         config = load_config()
-        downloads_dir = config.get("download_dir", os.path.join(os.path.expanduser("~"), "Downloads"))
+        from idm_cli.config import _get_default_download_dir
+        downloads_dir = config.get("download_dir", _get_default_download_dir())
         os.makedirs(downloads_dir, exist_ok=True)
         
-        tmp_dir = os.path.expanduser("~/.idm_cli/tmp")
+        from idm_cli.config import CONFIG_DIR
+        tmp_dir = os.path.join(CONFIG_DIR, "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
         
         if format_id == "direct_file":
@@ -232,6 +267,11 @@ def process_download(
         asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
     except KeyboardInterrupt:
         console.print("\n[bold red]Download cancelled by user. Progress saved to resume later.[/bold red]")
+        return False
+    except ConnectionError as e:
+        console.print(f"\n[bold red]{e}[/]")
+        if not is_interactive:
+            raise typer.Exit(code=1)
         return False
     except (ValueError, TypeError, OSError) as e:
         logger.error(f"Download failed: {e}")

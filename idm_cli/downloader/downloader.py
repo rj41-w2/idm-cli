@@ -16,7 +16,7 @@ from idm_cli.ui.utils import console, progress_listener
 from idm_cli.config import logger
 
 async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None, chunk_progress: dict = None):
-    max_retries = 5
+    max_retries = 10
     retry_count = 0
     progress_file = f"{dest_path}.progress.json"
     
@@ -77,8 +77,9 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
         except (aiohttp.client_exceptions.ClientPayloadError, asyncio.TimeoutError, aiohttp.client_exceptions.ClientError) as e:
             retry_count += 1
             if retry_count >= max_retries:
-                raise Exception(f"Chunk {chunk_index} failed after {max_retries} retries: {e}")
-            await asyncio.sleep(2 ** retry_count)
+                raise ConnectionError("Your poor internet connection. Try again.")
+            logger.warning(f"Chunk {chunk_index} retry {retry_count}/{max_retries}: {e}")
+            await asyncio.sleep(min(2 ** retry_count, 30))
 
 async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str, headers: dict, num_chunks: int = 8, progress_queue: asyncio.Queue = None, task_id = None, pause_event: asyncio.Event = None):
     """
@@ -238,7 +239,8 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_read=10), connector=aiohttp.TCPConnector(limit=0)) as session:
+        conn_limit = min(chunks, 8)
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_read=10), connector=aiohttp.TCPConnector(limit=conn_limit, limit_per_host=conn_limit)) as session:
             v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_ids, pause_event)) if video_url else None
             a_task = asyncio.create_task(download_file(session, audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None
     

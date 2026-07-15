@@ -1,11 +1,26 @@
 import os
 import json
 import asyncio
+import re
 from rich.console import Console
 from rich.progress import Progress
 import questionary
 from prompt_toolkit.lexers import Lexer
 from idm_cli import __version__
+
+ALLOWED_SCHEMES = ("http://", "https://", "www.")
+BLOCKED_KEYWORDS = ("javascript:", "data:", "file://", "ftp://")
+
+def is_valid_url(url: str) -> bool:
+    lower = url.strip().lower()
+    if not lower.startswith(ALLOWED_SCHEMES):
+        return False
+    for kw in BLOCKED_KEYWORDS:
+        if kw in lower:
+            return False
+    if len(url) > 2048:
+        return False
+    return True
 
 def sanitize_filename(title: str) -> str:
     return "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_.']).rstrip()[:60].strip()
@@ -43,6 +58,15 @@ def check_key_press():
 console = Console()
 
 CHANGELOG = {
+    "1.3.0": [
+        "Critical security fix: patched command injection vulnerability in winget extractor.",
+        "Added URL validation to block unsafe schemes (file://, javascript:, data://, ftp://).",
+        "Improved input validation in browser extension native host (URL, quality, filename).",
+        "Narrowed browser extension permissions by removing unnecessary host_permissions.",
+        "Fixed race condition in download queue lock mechanism.",
+        "Added timeouts to all subprocess calls for better stability.",
+        "Removed machine-specific config file from repository tracking."
+    ],
     "1.2.2": [
         "Fixed an issue where resuming a download could result in a corrupted video file.",
         "Switched FFmpeg automatic download to high-speed GitHub releases (BtbN builds) for maximum bandwidth.",

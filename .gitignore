@@ -28,3 +28,6 @@ venv.bak/
 .pytest_cache/
 bin/
 .bin/
+
+
+com.idm.cli.json

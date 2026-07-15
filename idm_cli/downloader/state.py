@@ -1,8 +1,9 @@
 import json
 import os
 import tempfile
+from idm_cli.config import CONFIG_DIR
 
-STATE_DIR = os.path.expanduser("~/.idm_cli")
+STATE_DIR = CONFIG_DIR
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
 
 def _ensure_dir():

@@ -8,5 +8,6 @@ questionary
 aiodns
 Brotli
 psutil
+platformdirs
 pytest
 pytest-asyncio

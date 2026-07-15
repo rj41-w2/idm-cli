@@ -9,7 +9,8 @@ from rich.console import Console
 from idm_cli.config import logger
 
 def check_for_updates():
-    config_dir = os.path.expanduser("~/.idm_cli")
+    from idm_cli.config import CONFIG_DIR
+    config_dir = CONFIG_DIR
     last_check_file = os.path.join(config_dir, "last_check.json")
 
     # Check last_check.json
