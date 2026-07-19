@@ -3,6 +3,7 @@ import json
 import time
 import urllib.request
 import subprocess
+import re
 import sys
 import questionary
 from rich.console import Console
@@ -48,9 +49,11 @@ def check_for_updates():
         from packaging.version import parse
         is_newer = parse(latest_version) > parse(__version__)
     except ImportError:
-        # Fallback to tuple or string comparison
         try:
-            is_newer = tuple(map(int, latest_version.split("."))) > tuple(map(int, __version__.split(".")))
+            def _parse_ver(v):
+                parts = re.split(r'[^0-9]+', v)
+                return tuple(int(p) for p in parts if p.isdigit()) or (0,)
+            is_newer = _parse_ver(latest_version) > _parse_ver(__version__)
         except (ValueError, TypeError) as e:
             logger.debug(f"Version comparison fallback: {e}")
             is_newer = latest_version > __version__

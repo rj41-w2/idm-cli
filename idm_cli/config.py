@@ -6,13 +6,15 @@ import logging
 from logging.handlers import RotatingFileHandler
 from platformdirs import user_data_dir, user_downloads_dir
 
+__all__ = ["CONFIG_DIR", "CONFIG_FILE", "logger", "load_config", "save_config", "setup_logging"]
+
 APP_NAME = "idm-cli"
 APP_AUTHOR = "idm-cli"
 CONFIG_DIR = user_data_dir(APP_NAME, APP_AUTHOR)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 LOG_FILE = os.path.join(CONFIG_DIR, "idm.log")
 
-def _migrate_old_config():
+def _migrate_old_config() -> None:
     old_dir = os.path.expanduser("~/.idm_cli")
     if old_dir == CONFIG_DIR:
         return
@@ -20,6 +22,8 @@ def _migrate_old_config():
         return
     os.makedirs(CONFIG_DIR, exist_ok=True)
     for item in os.listdir(old_dir):
+        if item == "__pycache__":
+            continue
         src = os.path.join(old_dir, item)
         dst = os.path.join(CONFIG_DIR, item)
         if not os.path.exists(dst):
@@ -34,16 +38,22 @@ def _migrate_old_config():
 def _get_default_download_dir() -> str:
     return user_downloads_dir()
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     _migrate_old_config()
     os.makedirs(CONFIG_DIR, exist_ok=True)
     logger = logging.getLogger("idm_cli")
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
-        handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=2)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+
+        file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=2, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        stream_handler.stream.reconfigure(errors="backslashreplace")
+        logger.addHandler(stream_handler)
     return logger
 
 logger = setup_logging()
@@ -55,7 +65,7 @@ DEFAULT_CONFIG = {
     "last_version": "0.0.0"
 }
 
-def load_config():
+def load_config() -> dict:
     config = DEFAULT_CONFIG.copy()
     if os.path.exists(CONFIG_FILE):
         try:
@@ -66,7 +76,7 @@ def load_config():
             logger.warning(f"Failed to load config: {e}")
     return config
 
-def save_config(config_data):
+def save_config(config_data: dict) -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
     try:
         with open(CONFIG_FILE, "w") as f:

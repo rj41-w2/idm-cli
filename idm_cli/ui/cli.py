@@ -1,22 +1,19 @@
 import time
+import os
 import typer
 import shlex
 import argparse
 import pyfiglet
 import questionary
 from typing import Optional
-from rich.panel import Panel
-from rich.align import Align
-from rich.text import Text
 from rich.table import Table
 
 from idm_cli.update_checker import check_for_updates
 from idm_cli import __version__
 from idm_cli.ui.utils import console, custom_style, IDMLexer, check_first_run, is_valid_url
-from idm_cli.extension.extension import install_extension
 from idm_cli.downloader.handlers import handle_queue, handle_resume
 from idm_cli.downloader.core import process_download
-from idm_cli.config import load_config
+from idm_cli.config import load_config, CONFIG_DIR
 
 global_config = load_config()
 
@@ -39,9 +36,9 @@ def download(
     console.print(f"[bold cyan]{banner_text}[/bold cyan]")
     console.print(f"  [bold white]--- The Ultimate High-Speed CLI Downloader ---[/bold white] [dim white](v{__version__})[/dim white]")
     console.print("  [dim white]      Type 'help' for available commands[/dim white]\n")
-    
+
     check_first_run()
-    
+
     try:
         check_for_updates()
     except Exception:
@@ -89,7 +86,7 @@ def download(
         
         found_task_id = None
 
-        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume", "install extension"] and not current_url.strip().lower().startswith("winget "):
+        if is_interactive and current_url and current_url.strip().lower() not in ["help", "exit", "start queue", "queue start", "resume"] and not current_url.strip().lower().startswith("winget "):
             try:
                 import platform as _platform
                 parts = shlex.split(current_url, posix=(_platform.system() != "Windows"))
@@ -118,7 +115,7 @@ def download(
         if is_interactive and current_url:
             lower = current_url.strip().lower()
             is_url = lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
-            is_known_cmd = lower in ["help", "exit", "start queue", "queue start", "resume", "install extension"]
+            is_known_cmd = lower in ["help", "exit", "start queue", "queue start", "resume"]
             is_winget = lower.startswith("winget ")
             is_flag_only = lower.startswith("-")
             if not is_url and not is_known_cmd and not is_winget and not is_flag_only:
@@ -138,7 +135,6 @@ def download(
             table_cmds.add_row("<URL>", "Paste any Video/File URL to download")
             table_cmds.add_row("resume", "Resume or delete an incomplete download")
             table_cmds.add_row("start queue", "Start downloading queued files")
-            table_cmds.add_row("install extension", "Guide to install Chrome/Edge extension")
             table_cmds.add_row("help", "Show this help menu")
             table_cmds.add_row("exit", "Exit the application")
             
@@ -155,13 +151,6 @@ def download(
             console.print()
             console.print(table_flags)
             console.print("\n  [dim white]Example: https://youtube.com/... -q 1080p -Q[/dim white]\n")
-            if not is_interactive:
-                raise typer.Exit()
-            current_url = None
-            continue
-            
-        if current_url.strip().lower() == "install extension":
-            install_extension()
             if not is_interactive:
                 raise typer.Exit()
             current_url = None

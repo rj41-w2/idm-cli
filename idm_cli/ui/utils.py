@@ -8,6 +8,8 @@ import questionary
 from prompt_toolkit.lexers import Lexer
 from idm_cli import __version__
 
+__all__ = ["console", "custom_style", "check_key_press", "sanitize_filename", "is_valid_url", "check_first_run", "progress_listener", "IDMLexer"]
+
 ALLOWED_SCHEMES = ("http://", "https://", "www.")
 BLOCKED_KEYWORDS = ("javascript:", "data:", "file://", "ftp://")
 
@@ -23,7 +25,9 @@ def is_valid_url(url: str) -> bool:
     return True
 
 def sanitize_filename(title: str) -> str:
-    return "".join([c for c in title if c.isalpha() or c.isdigit() or c in ' -_.']).rstrip()[:60].strip()
+    safe = "".join(c for c in title if c not in r'<>:"/\|?*')
+    safe = safe.strip('. ')
+    return (safe[:60] or "download").strip()
 
 try:
     import msvcrt
@@ -61,8 +65,6 @@ CHANGELOG = {
     "1.3.0": [
         "Critical security fix: patched command injection vulnerability in winget extractor.",
         "Added URL validation to block unsafe schemes (file://, javascript:, data://, ftp://).",
-        "Improved input validation in browser extension native host (URL, quality, filename).",
-        "Narrowed browser extension permissions by removing unnecessary host_permissions.",
         "Fixed race condition in download queue lock mechanism.",
         "Added timeouts to all subprocess calls for better stability.",
         "Removed machine-specific config file from repository tracking."
@@ -75,7 +77,7 @@ CHANGELOG = {
     ]
 }
 
-def check_first_run():
+def check_first_run() -> None:
     from idm_cli.config import load_config, save_config
     config = load_config()
     last_version = config.get("last_version", "0.0.0")

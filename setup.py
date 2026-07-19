@@ -27,9 +27,7 @@ setup(
     url="https://github.com/rj41-w2/idm-cli",
     packages=find_packages(),
     include_package_data=True,
-    package_data={
-        "idm_cli": ["browser_extension/*", "browser_extension/**/*"],
-    },
+    package_data={},
     install_requires=requirements,
     classifiers=[
         "Programming Language :: Python :: 3",

@@ -5,6 +5,7 @@ import logging
 import shutil
 import zipfile
 import aiohttp
+import aiofiles
 from idm_cli.ui.utils import console
 
 logger = logging.getLogger(__name__)
@@ -48,28 +49,18 @@ async def download_ffmpeg() -> str:
     bin_dir = os.path.join(CONFIG_DIR, "bin")
     os.makedirs(bin_dir, exist_ok=True)
 
-    from idm_cli.downloader.downloader import download_media
-    import asyncio
-
-    pause_event = asyncio.Event()
-    pause_event.set()
-
     if _is_windows:
         archive_path = os.path.join(bin_dir, "ffmpeg.zip")
     else:
         archive_path = os.path.join(bin_dir, "ffmpeg.tar.xz")
 
-    await download_media(
-        video_url=url,
-        audio_url=None,
-        headers={},
-        chunks=8,
-        video_dest=archive_path,
-        audio_dest="",
-        pause_event=pause_event,
-        warning_state=None,
-        media_type="FFmpeg (Essentials)"
-    )
+    with console.status("[bold cyan]Downloading FFmpeg...", spinner="dots"):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                async with aiofiles.open(archive_path, 'wb') as f:
+                    async for chunk in resp.content.iter_chunked(1024 * 1024):
+                        await f.write(chunk)
 
     bin_name = _ffmpeg_binary_name()
 
@@ -115,6 +106,8 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
     if not ffmpeg_bin:
         raise RuntimeError("FFmpeg is not installed! Cannot mux files.")
 
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
     cmd = [
         ffmpeg_bin,
         "-y",
@@ -152,6 +145,8 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
     ffmpeg_bin = get_ffmpeg_path()
     if not ffmpeg_bin:
         raise RuntimeError("FFmpeg is not installed! Cannot convert audio.")
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
     cmd = [
         ffmpeg_bin,

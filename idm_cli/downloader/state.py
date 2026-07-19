@@ -3,6 +3,8 @@ import os
 import tempfile
 from idm_cli.config import CONFIG_DIR
 
+__all__ = ["get_incomplete_downloads", "save_download", "remove_download"]
+
 STATE_DIR = CONFIG_DIR
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
 
@@ -21,7 +23,7 @@ def get_incomplete_downloads() -> dict:
     except (json.JSONDecodeError, IOError):
         return {}
 
-def _write_state(state: dict):
+def _write_state(state: dict) -> None:
     """Writes the state to the JSON file atomically."""
     _ensure_dir()
     # Write atomically using a temporary file in the same directory
@@ -38,7 +40,7 @@ def _write_state(state: dict):
             os.remove(temp_path)
         raise
 
-def save_download(task_id: str, url: str, format_id: str, title: str, video_dest: str, audio_dest: str, final_dest: str, status: str = "interrupted"):
+def save_download(task_id: str, url: str, format_id: str, title: str, video_dest: str, audio_dest: str, final_dest: str, status: str = "interrupted") -> None:
     """Adds or updates a download in the JSON."""
     state = get_incomplete_downloads()
     state[task_id] = {
@@ -52,7 +54,7 @@ def save_download(task_id: str, url: str, format_id: str, title: str, video_dest
     }
     _write_state(state)
 
-def remove_download(task_id: str):
+def remove_download(task_id: str) -> None:
     """Removes the entry from JSON upon completion."""
     state = get_incomplete_downloads()
     if task_id in state:

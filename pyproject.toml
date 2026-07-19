@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "idm-cli"
+version = "1.3.0"
+description = "A lightning-fast, universal command-line download manager"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [
+    { name = "Rehan" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+]
+dependencies = [
+    "typer",
+    "rich",
+    "aiohttp",
+    "aiofiles",
+    "yt-dlp",
+    "pyfiglet",
+    "questionary",
+    "aiodns",
+    "Brotli",
+    "psutil",
+    "platformdirs",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "packaging",
+]
+
+[project.urls]
+Homepage = "https://github.com/rj41-w2/idm-cli"
+
+[project.scripts]
+idm = "idm_cli.ui.cli:app"

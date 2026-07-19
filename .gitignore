@@ -29,5 +29,6 @@ venv.bak/
 bin/
 .bin/
 
-
-com.idm.cli.json
+# Local
+AGENTS.md
+tests/__pycache__/

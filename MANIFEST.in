@@ -1,2 +1,1 @@
 include requirements.txt
-recursive-include idm_cli/browser_extension *

@@ -15,7 +15,7 @@ from rich.progress import (
 from idm_cli.ui.utils import console, progress_listener
 from idm_cli.config import logger
 
-async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None, chunk_progress: dict = None):
+async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, end: int, chunk_index: int, dest_path: str, headers: dict, progress_queue: asyncio.Queue, task_id, pause_event: asyncio.Event = None, chunk_progress: dict = None, chunk_lock: asyncio.Lock = None):
     max_retries = 10
     retry_count = 0
     progress_file = f"{dest_path}.progress.json"
@@ -33,6 +33,7 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                 chunk_headers['Range'] = f'bytes={current_start}-'
             else:
                 chunk_headers['Range'] = f'bytes={current_start}-{end}'
+            chunk_headers['Accept-Encoding'] = 'identity'
             
             async with session.get(url, headers=chunk_headers) as response:
                 response.raise_for_status()
@@ -59,12 +60,21 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                         await f.write(chunk)
                         
                         if chunk_progress is not None:
-                            chunk_progress[str(chunk_index)] = chunk_progress.get(str(chunk_index), 0) + len(chunk)
-                            try:
-                                async with aiofiles.open(progress_file, 'w') as pf:
-                                    await pf.write(json.dumps(chunk_progress))
-                            except OSError as e:
-                                logger.debug(f"Failed to write progress: {e}")
+                            if chunk_lock is not None:
+                                async with chunk_lock:
+                                    chunk_progress[str(chunk_index)] = chunk_progress.get(str(chunk_index), 0) + len(chunk)
+                                    try:
+                                        async with aiofiles.open(progress_file, 'w') as pf:
+                                            await pf.write(json.dumps(chunk_progress))
+                                    except OSError as e:
+                                        logger.debug(f"Failed to write progress: {e}")
+                            else:
+                                chunk_progress[str(chunk_index)] = chunk_progress.get(str(chunk_index), 0) + len(chunk)
+                                try:
+                                    async with aiofiles.open(progress_file, 'w') as pf:
+                                        await pf.write(json.dumps(chunk_progress))
+                                except OSError as e:
+                                    logger.debug(f"Failed to write progress: {e}")
                                 
                         if progress_queue is not None and task_id is not None:
                             current_task_id = task_id[chunk_index] if isinstance(task_id, list) else task_id
@@ -74,12 +84,21 @@ async def _download_chunk(session: aiohttp.ClientSession, url: str, start: int, 
                                 'bytes_downloaded': len(chunk)
                             })
             return dest_path
-        except (aiohttp.client_exceptions.ClientPayloadError, asyncio.TimeoutError, aiohttp.client_exceptions.ClientError) as e:
+        except (aiohttp.ClientPayloadError, asyncio.TimeoutError, aiohttp.ClientConnectionError, aiohttp.ClientConnectorError) as e:
             retry_count += 1
             if retry_count >= max_retries:
                 raise ConnectionError("Your poor internet connection. Try again.")
             logger.warning(f"Chunk {chunk_index} retry {retry_count}/{max_retries}: {e}")
             await asyncio.sleep(min(2 ** retry_count, 30))
+        except aiohttp.ClientResponseError as e:
+            if e.status >= 500:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    raise ConnectionError(f"Server error {e.status}. Try again.")
+                logger.warning(f"Chunk {chunk_index} retry {retry_count}/{max_retries}: HTTP {e.status}")
+                await asyncio.sleep(min(2 ** retry_count, 30))
+            else:
+                raise
 
 async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str, headers: dict, num_chunks: int = 8, progress_queue: asyncio.Queue = None, task_id = None, pause_event: asyncio.Event = None):
     """
@@ -89,19 +108,35 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
     chunk_progress = {}
     
     if os.path.exists(dest_path) and not os.path.exists(progress_file):
-        file_size = os.path.getsize(dest_path)
-        if progress_queue is not None and task_id is not None:
-            if isinstance(task_id, list):
-                chunk_size_est = file_size // num_chunks
-                for i in range(num_chunks):
-                    end = file_size - 1 if i == num_chunks - 1 else ((i * chunk_size_est) + chunk_size_est - 1)
-                    c_size = end - (i * chunk_size_est) + 1
-                    await progress_queue.put({'task_id': task_id[i], 'total_size': c_size})
-                    await progress_queue.put({'task_id': task_id[i], 'bytes_downloaded': c_size})
-            else:
-                await progress_queue.put({'task_id': task_id, 'total_size': file_size})
-                await progress_queue.put({'task_id': task_id, 'bytes_downloaded': file_size})
-        return
+        local_size = os.path.getsize(dest_path)
+        server_size = None
+        try:
+            async with session.head(url, headers=headers or {}, allow_redirects=True) as response:
+                response.raise_for_status()
+                cl = response.headers.get('Content-Length')
+                if cl:
+                    server_size = int(cl)
+        except aiohttp.ClientError:
+            pass
+        if server_size is not None and local_size != server_size:
+            logger.debug(f"File exists but size mismatch (local={local_size}, server={server_size}), restarting download")
+            try:
+                os.remove(dest_path)
+            except OSError:
+                pass
+        else:
+            if progress_queue is not None and task_id is not None:
+                if isinstance(task_id, list):
+                    chunk_size_est = local_size // num_chunks
+                    for i in range(num_chunks):
+                        end = local_size - 1 if i == num_chunks - 1 else ((i * chunk_size_est) + chunk_size_est - 1)
+                        c_size = end - (i * chunk_size_est) + 1
+                        await progress_queue.put({'task_id': task_id[i], 'total_size': c_size})
+                        await progress_queue.put({'task_id': task_id[i], 'bytes_downloaded': c_size})
+                else:
+                    await progress_queue.put({'task_id': task_id, 'total_size': local_size})
+                    await progress_queue.put({'task_id': task_id, 'bytes_downloaded': local_size})
+            return
 
     if os.path.exists(progress_file):
         try:
@@ -121,6 +156,7 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
     try:
         range_headers = headers.copy()
         range_headers['Range'] = 'bytes=0-0'
+        range_headers['Accept-Encoding'] = 'identity'
         async with session.get(url, headers=range_headers, allow_redirects=True) as response:
             response.raise_for_status()
             content_range = response.headers.get('Content-Range')
@@ -204,12 +240,13 @@ async def download_file(session: aiohttp.ClientSession, url: str, dest_path: str
                 })
 
     chunk_size = file_size // num_chunks
+    chunk_lock = asyncio.Lock()
     tasks = []
     for i in range(num_chunks):
         start = i * chunk_size
         end = file_size - 1 if i == num_chunks - 1 else (start + chunk_size - 1)
         tasks.append(
-            _download_chunk(session, url, start, end, i, dest_path, headers, progress_queue, task_id, pause_event, chunk_progress)
+            _download_chunk(session, url, start, end, i, dest_path, headers, progress_queue, task_id, pause_event, chunk_progress, chunk_lock)
         )
         
     await asyncio.gather(*tasks)
@@ -239,7 +276,7 @@ async def download_media(video_url: str, audio_url: str, headers: dict, chunks: 
 
         listener = asyncio.create_task(progress_listener(queue, progress, pause_event, warning_state))
 
-        conn_limit = min(chunks, 8)
+        conn_limit = min(chunks * 2, 16)
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_read=10), connector=aiohttp.TCPConnector(limit=conn_limit, limit_per_host=conn_limit)) as session:
             v_task = asyncio.create_task(download_file(session, video_url, video_dest, headers, chunks, queue, video_task_ids, pause_event)) if video_url else None
             a_task = asyncio.create_task(download_file(session, audio_url, audio_dest, headers, chunks, queue, audio_task_id, pause_event)) if audio_url else None

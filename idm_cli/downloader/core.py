@@ -13,6 +13,16 @@ from idm_cli.downloader.muxer import mux_audio_video, convert_to_mp3
 from idm_cli.ui.utils import console, custom_style, sanitize_filename
 from idm_cli.config import logger
 
+def run_download_and_mux(video_url, audio_url, headers, chunks, video_dest, audio_dest, final_dest, media_type, pause_event, warning_state):
+    asyncio.run(download_media(video_url, audio_url, headers, chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
+    if video_dest and audio_dest:
+        mux_audio_video(video_dest, audio_dest, final_dest)
+    elif audio_dest and not video_dest:
+        convert_to_mp3(audio_dest, final_dest)
+    elif video_dest and not audio_dest:
+        shutil.move(video_dest, final_dest)
+    return True
+
 def process_download(
     current_url: str,
     is_interactive: bool,
@@ -55,11 +65,20 @@ def process_download(
     with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
         try:
             extractor = get_extractor(url_to_extract)
-            info = extractor.fetch_all_info(url_to_extract)
+            try:
+                info = extractor.fetch_all_info(url_to_extract)
+            except Exception:
+                if extractor.__name__ == "idm_cli.extractors.ytdlp":
+                    import importlib
+                    extractor = importlib.import_module("idm_cli.extractors.direct")
+                    info = extractor.fetch_all_info(url_to_extract)
+                else:
+                    raise
+
             title = info.get("title", "download") if not found_task_id else title
             if loop_filename and not found_task_id:
                 title = os.path.basename(loop_filename)
-            
+
             if info.get("_type") == "playlist":
                 console.print("\n[bold yellow]Currently, the feature to download album/playlist photos or videos is not added.[/]")
                 if not is_interactive:
@@ -72,6 +91,12 @@ def process_download(
         except (ValueError, TypeError, OSError) as e:
             logger.error(f"Error fetching info: {e}")
             console.print(f"[bold red]Error fetching info:[/] {e}")
+            if not is_interactive:
+                raise typer.Exit(code=1)
+            return False
+        except Exception as e:
+            logger.error(f"Error fetching info: {e}")
+            console.print(f"[bold red]Error:[/] {e}")
             if not is_interactive:
                 raise typer.Exit(code=1)
             return False
@@ -264,7 +289,7 @@ def process_download(
     signal.signal(signal.SIGINT, custom_handler)
 
     try:
-        asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
+        run_download_and_mux(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, final_dest, media_type, pause_event, warning_state)
     except KeyboardInterrupt:
         console.print("\n[bold red]Download cancelled by user. Progress saved to resume later.[/bold red]")
         return False
@@ -283,22 +308,6 @@ def process_download(
         signal.signal(signal.SIGINT, original_sigint)
 
     console.print("\n[bold green]✓[/] Downloads completed.")
-    console.print("[bold cyan]Muxing audio and video streams...[/]")
-
-    with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
-        try:
-            if video_dest and audio_dest:
-                mux_audio_video(video_dest, audio_dest, final_dest)
-            elif audio_dest and not video_dest:
-                convert_to_mp3(audio_dest, final_dest)
-            elif video_dest and not audio_dest:
-                shutil.move(video_dest, final_dest)
-        except (ValueError, TypeError, OSError) as e:
-            logger.error(f"Muxing failed: {e}")
-            console.print(f"[bold red]Muxing failed:[/] {e}")
-            if not is_interactive:
-                raise typer.Exit(code=1)
-            return False
 
     remove_download(task_id)
     console.print(f"\n[bold green] Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")

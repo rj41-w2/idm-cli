@@ -11,7 +11,11 @@ def fetch_all_info(url: str) -> dict:
     if not url.strip().lower().startswith("winget "):
         raise Exception("Invalid winget command format.")
     
-    cmd = url.strip().replace("install", "show", 1)
+    parts = url.strip().split(None, 2)
+    if len(parts) >= 3 and parts[1].lower() == "install":
+        cmd = f"{parts[0]} show {parts[2]}"
+    else:
+        cmd = url.strip().replace("install", "show", 1)
     
     try:
         args = shlex.split(cmd, posix=False)

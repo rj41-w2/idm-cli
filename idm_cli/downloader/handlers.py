@@ -3,16 +3,63 @@ import asyncio
 import shutil
 import typer
 import questionary
+import psutil
 from idm_cli.downloader.state import get_incomplete_downloads, remove_download
 from idm_cli.extractors import get_extractor
-from idm_cli.downloader.downloader import download_media
-from idm_cli.downloader.muxer import mux_audio_video, convert_to_mp3
+from idm_cli.downloader.core import run_download_and_mux
 from idm_cli.ui.utils import console, custom_style
-from idm_cli.extension.daemon import acquire_lock, release_lock
-from idm_cli.config import logger
+from idm_cli.config import logger, CONFIG_DIR
+
+LOCK_FILE = os.path.join(CONFIG_DIR, "queue.lock")
+
+def _is_daemon_running() -> bool:
+    if not os.path.exists(LOCK_FILE):
+        return False
+    try:
+        with open(LOCK_FILE, "r") as f:
+            pid = int(f.read().strip())
+        if pid == os.getpid():
+            return False
+        return psutil.pid_exists(pid)
+    except (OSError, ValueError):
+        return False
+
+def _acquire_lock() -> bool:
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    try:
+        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        try:
+            os.write(fd, str(os.getpid()).encode())
+        finally:
+            os.close(fd)
+        return True
+    except FileExistsError:
+        try:
+            with open(LOCK_FILE, "r") as f:
+                pid = int(f.read().strip())
+            if psutil.pid_exists(pid):
+                return False
+        except (OSError, ValueError):
+            pass
+        try:
+            os.remove(LOCK_FILE)
+        except OSError:
+            pass
+        return _acquire_lock()
+
+def _release_lock():
+    if not os.path.exists(LOCK_FILE):
+        return
+    try:
+        with open(LOCK_FILE, "r") as f:
+            pid = int(f.read().strip())
+        if pid == os.getpid():
+            os.remove(LOCK_FILE)
+    except (OSError, ValueError):
+        pass
 
 def handle_queue(is_interactive: bool, loop_chunks: int):
-    if not acquire_lock():
+    if not _acquire_lock():
         console.print("[bold red]Queue daemon is already running![/]")
         if not is_interactive:
             raise typer.Exit(code=1)
@@ -54,7 +101,6 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
                 
             with console.status(f"[bold cyan]Extracting URLs...", spinner="dots"):
                 try:
-                    extractor = get_extractor(url_to_extract)
                     extracted = extractor.extract_urls(info, format_id)
                     video_url = extracted.get("video_url")
                     audio_url = extracted.get("audio_url")
@@ -72,14 +118,7 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
             warning_state = {"show": False}
             
             try:
-                asyncio.run(download_media(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, pause_event, warning_state, media_type))
-                with console.status("[bold magenta]Running FFmpeg...", spinner="bouncingBar"):
-                    if video_dest and audio_dest:
-                        mux_audio_video(video_dest, audio_dest, final_dest)
-                    elif audio_dest and not video_dest:
-                        convert_to_mp3(audio_dest, final_dest)
-                    elif video_dest and not audio_dest:
-                        shutil.move(video_dest, final_dest)
+                run_download_and_mux(video_url, audio_url, headers, loop_chunks, video_dest, audio_dest, final_dest, media_type, pause_event, warning_state)
                 remove_download(tid)
                 console.print(f"\n[bold green]Success! {media_type} saved as:[/] [bold white]{final_dest}[/]")
             except KeyboardInterrupt:
@@ -93,7 +132,7 @@ def handle_queue(is_interactive: bool, loop_chunks: int):
                 console.print(f"[bold red]Download failed:[/] {e}")
                 remove_download(tid)
     finally:
-        release_lock()
+        _release_lock()
         
     if not is_interactive:
         raise typer.Exit(code=0)
@@ -143,6 +182,10 @@ def handle_resume(is_interactive: bool):
             a_part = f"{task_data['audio_dest']}.part{i}"
             if os.path.exists(v_part): os.remove(v_part)
             if os.path.exists(a_part): os.remove(a_part)
+        v_progress = f"{task_data['video_dest']}.progress.json"
+        a_progress = f"{task_data['audio_dest']}.progress.json"
+        if os.path.exists(v_progress): os.remove(v_progress)
+        if os.path.exists(a_progress): os.remove(a_progress)
         console.print(f"[bold red]Deleted:[/] {title_selected}")
         if not is_interactive:
             raise typer.Exit(code=0)
