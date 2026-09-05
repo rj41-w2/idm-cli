@@ -118,10 +118,10 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
     ]
 
     try:
-        logger.info(f"Muxing {video_path} and {audio_path} into {output_path}")
+        logger.debug(f"Muxing {video_path} and {audio_path} into {output_path}")
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        logger.info("Muxing successful. Deleting original files.")
+        logger.debug("Muxing successful. Deleting original files.")
         try:
             os.remove(video_path)
             os.remove(audio_path)
@@ -158,10 +158,10 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
     ]
 
     try:
-        logger.info(f"Converting {audio_path} into {output_path}")
+        logger.debug(f"Converting {audio_path} into {output_path}")
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        logger.info("Conversion successful. Deleting original file.")
+        logger.debug("Conversion successful. Deleting original file.")
         try:
             os.remove(audio_path)
         except OSError as e:

@@ -1,12 +1,12 @@
-import os
 import json
-import platform
-import shutil
 import logging
+import os
+import shutil
 from logging.handlers import RotatingFileHandler
+
 from platformdirs import user_data_dir, user_downloads_dir
 
-__all__ = ["CONFIG_DIR", "CONFIG_FILE", "logger", "load_config", "save_config", "setup_logging"]
+__all__ = ["CONFIG_DIR", "CONFIG_FILE", "load_config", "logger", "mute_console_logging", "save_config", "setup_logging", "unmute_console_logging"]
 
 APP_NAME = "idm-cli"
 APP_AUTHOR = "idm-cli"
@@ -83,3 +83,29 @@ def save_config(config_data: dict) -> None:
             json.dump(config_data, f, indent=4)
     except OSError as e:
         logger.error(f"Failed to save config: {e}")
+
+
+def mute_console_logging() -> None:
+    """Remove the StreamHandler from the logger so logs go to file only (used during active downloads)."""
+    _logger = logging.getLogger("idm_cli")
+    for handler in list(_logger.handlers):
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler):
+            _logger.removeHandler(handler)
+
+
+def unmute_console_logging() -> None:
+    """Re-attach a StreamHandler if it was removed."""
+    _logger = logging.getLogger("idm_cli")
+    has_stream = any(
+        isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler)
+        for h in _logger.handlers
+    )
+    if not has_stream:
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        try:
+            stream_handler.stream.reconfigure(errors="backslashreplace")
+        except AttributeError:
+            pass
+        _logger.addHandler(stream_handler)
