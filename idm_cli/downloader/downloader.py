@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 
 import aiofiles
 from curl_cffi.requests import AsyncSession, RequestsError
@@ -27,6 +28,10 @@ __all__ = ["download_file", "make_session"]
 _IMPERSONATE = "chrome120"
 MIN_CHUNKS = 1
 MAX_CHUNKS = 32
+
+
+class _RetryableDownloadError(RuntimeError):
+    """A response ended before the requested byte range was complete."""
 
 
 def make_session() -> AsyncSession:
@@ -59,6 +64,8 @@ async def _download_chunk(
             existing_size = (
                 chunk_progress.get(str(chunk_index), 0) if chunk_progress else 0
             )
+            if not isinstance(existing_size, int) or existing_size < 0:
+                raise ValueError("Invalid resume metadata for download chunk.")
             current_start = start + existing_size
 
             if end is not None and current_start > end:
@@ -82,11 +89,19 @@ async def _download_chunk(
                     )
                 if use_range:
                     content_range = response.headers.get("Content-Range", "")
-                    expected_prefix = f"bytes {current_start}-"
-                    if not content_range.startswith(expected_prefix):
+                    match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+|\*)", content_range)
+                    if not match or int(match.group(1)) != current_start:
                         raise ValueError(
                             "Server returned an invalid Content-Range header."
                         )
+                    response_end = int(match.group(2))
+                    if end is not None and response_end > end:
+                        raise ValueError(
+                            "Server returned bytes outside the requested range."
+                        )
+                    expected_bytes = response_end - current_start + 1
+                else:
+                    expected_bytes = None
 
                 if not os.path.exists(dest_path):
                     async with aiofiles.open(dest_path, "wb") as f:
@@ -102,11 +117,20 @@ async def _download_chunk(
                     elif 0 < total_bytes < 5 * 1024 * 1024:
                         buffer_size = 256 * 1024
 
+                    received_bytes = 0
                     async for chunk in response.aiter_content(chunk_size=buffer_size):
                         if pause_event is not None:
                             await pause_event.wait()
                         if not chunk:
                             break
+                        received_bytes += len(chunk)
+                        if (
+                            expected_bytes is not None
+                            and received_bytes > expected_bytes
+                        ):
+                            raise ValueError(
+                                "Server returned more bytes than requested."
+                            )
                         await f.write(chunk)
 
                         if chunk_progress is not None:
@@ -147,11 +171,22 @@ async def _download_chunk(
                                 }
                             )
 
+                    if expected_bytes is not None and received_bytes != expected_bytes:
+                        raise _RetryableDownloadError(
+                            f"Expected {expected_bytes} bytes but received {received_bytes}."
+                        )
+                    if not use_range:
+                        content_length = response.headers.get("Content-Length")
+                        if content_length and received_bytes != int(content_length):
+                            raise _RetryableDownloadError(
+                                f"Expected {content_length} bytes but received {received_bytes}."
+                            )
+
             if on_success is not None:
                 on_success(chunk_index)
             return dest_path
 
-        except RequestsError as e:
+        except (RequestsError, _RetryableDownloadError) as e:
             retry_count += 1
             if retry_count >= max_retries:
                 raise ConnectionError(
@@ -214,7 +249,7 @@ async def download_file(
                 os.remove(dest_path)
             except OSError:
                 pass
-        else:
+        elif server_size is not None:
             if progress_queue is not None and task_id is not None:
                 if isinstance(task_id, list):
                     chunk_size_est = local_size // num_chunks
@@ -262,19 +297,17 @@ async def download_file(
         probe_headers = headers.copy()
         probe_headers["Range"] = "bytes=0-0"
         probe_headers["Accept-Encoding"] = "identity"
-        response = await session.get(url, headers=probe_headers)
-        try:
+        async with session.stream("GET", url, headers=probe_headers) as response:
             response.raise_for_status()
             content_range = response.headers.get("Content-Range", "")
-            if response.status_code == 206 and content_range and "/" in content_range:
-                file_size = int(content_range.split("/")[-1])
+            match = re.fullmatch(r"bytes 0-0/(\d+)", content_range)
+            if response.status_code == 206 and match:
+                file_size = int(match.group(1))
                 supports_ranges = True
             else:
                 cl = response.headers.get("Content-Length")
                 if cl:
                     file_size = int(cl)
-        finally:
-            response.close()
     except RequestsError:
         pass
 
@@ -291,7 +324,7 @@ async def download_file(
         except RequestsError:
             pass
 
-    if file_size and not supports_ranges:
+    if not supports_ranges:
         # A server that ignores Range cannot safely resume or run parallel chunks.
         chunk_progress = {}
         for path in (progress_file, dest_path):
@@ -339,6 +372,10 @@ async def download_file(
             chunk_progress,
             use_range=False,
         )
+        if file_size is not None and os.path.getsize(dest_path) != file_size:
+            raise _RetryableDownloadError(
+                f"Expected a {file_size}-byte file but received {os.path.getsize(dest_path)} bytes."
+            )
         if os.path.exists(progress_file):
             try:
                 os.remove(progress_file)
@@ -371,6 +408,7 @@ async def download_file(
                 )
 
     # ── parallel chunk download ────────────────────────────────────────────────
+    num_chunks = min(num_chunks, file_size)
     chunk_size = file_size // num_chunks
     chunk_lock = asyncio.Lock()
     tasks = []
@@ -396,6 +434,9 @@ async def download_file(
         )
 
     await asyncio.gather(*tasks)
+
+    if sum(chunk_progress.get(str(i), 0) for i in range(num_chunks)) != file_size:
+        raise _RetryableDownloadError("Download finished with missing bytes.")
 
     if os.path.exists(progress_file):
         try:

@@ -1,6 +1,7 @@
 import pytest
 
 from idm_cli.downloader.downloader import _download_chunk, download_file
+from idm_cli.extractors.direct import extract_urls
 from idm_cli.ui.utils import is_valid_url
 
 
@@ -64,3 +65,12 @@ def test_url_validation_rejects_missing_host_and_accepts_https():
     assert is_valid_url("https://example.com/file")
     assert not is_valid_url("https://")
     assert not is_valid_url("javascript:alert(1)")
+
+
+def test_direct_extractor_does_not_turn_audio_only_into_audio():
+    extracted = extract_urls(
+        {"url": "https://example.com/file.zip", "title": "file.zip"},
+        "audio_only",
+    )
+    assert extracted["audio_url"] is None
+    assert extracted["video_url"] == "https://example.com/file.zip"

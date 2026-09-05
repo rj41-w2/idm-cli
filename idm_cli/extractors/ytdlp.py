@@ -15,7 +15,7 @@ def fetch_all_info(url: str) -> dict:
         "writesubtitles": False,
         "writeautomaticsub": False,
         "getcomments": False,
-        "extractor_args": {"youtube": ["player_client=android,ios"]},
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -26,28 +26,16 @@ def fetch_all_info(url: str) -> dict:
             # Bypass 1: Use alternative player clients (Android, iOS, TV)
             clients_to_try = ["android", "ios", "tv"]
             for client in clients_to_try:
-                ydl_opts["extractor_args"] = {"youtube": [f"player_client={client}"]}
+                ydl_opts["extractor_args"] = {"youtube": {"player_client": [client]}}
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         return ydl.extract_info(url, download=False)
                 except Exception:  # noqa: BLE001,S112 - try the next extractor fallback
                     continue
 
-            # Bypass 2: Local Browser Cookies
-            ydl_opts.pop("extractor_args", None)
-
-            for browser in ["chrome", "edge", "firefox", "brave", "opera"]:
-                ydl_opts["cookiesfrombrowser"] = (browser,)
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        return ydl.extract_info(url, download=False)
-                except Exception:  # noqa: BLE001,S112 - try the next browser fallback
-                    continue
-
         raise RuntimeError(
-            "YouTube bot protection blocked the request and bypass failed. Ensure your browser (Chrome/Edge) is FULLY CLOSED so cookies can be read, then try again."
+            "YouTube bot protection blocked the request. Configure authenticated yt-dlp access explicitly if the site requires login."
         ) from e
-        raise
 
 
 def get_video_resolutions(info: dict) -> list[dict]:
@@ -97,7 +85,10 @@ def get_video_resolutions(info: dict) -> list[dict]:
             }
         else:
             # Prefer pre-muxed (video+audio in one stream) if found
-            if fmt.get("acodec") != "none" and not resolutions[height]["pre_muxed"]:
+            if (
+                fmt.get("acodec") not in (None, "none")
+                and not resolutions[height]["pre_muxed"]
+            ):
                 resolutions[height] = {
                     "resolution": res_str,
                     "display_label": display_label,
@@ -139,7 +130,9 @@ def extract_urls(info: dict, video_format_id: str) -> dict:
         audio_formats = [
             f
             for f in formats
-            if f.get("vcodec") == "none" and f.get("acodec") != "none"
+            if f.get("vcodec") == "none"
+            and f.get("acodec") not in (None, "none")
+            and f.get("protocol") in {"http", "https"}
         ]
         if audio_formats:
             # Sort by audio bitrate if available

@@ -98,9 +98,22 @@ def load_config() -> dict:
         try:
             with open(CONFIG_FILE, "r") as f:
                 user_config = json.load(f)
-                config.update(user_config)
-        except (OSError, json.JSONDecodeError) as e:
+                if isinstance(user_config, dict):
+                    config.update(user_config)
+                else:
+                    raise TypeError("config root must be an object")
+        except (OSError, TypeError, json.JSONDecodeError) as e:
             logger.warning(f"Failed to load config: {e}")
+    chunks = config.get("default_chunks")
+    if not isinstance(chunks, int) or not 1 <= chunks <= 32:
+        config["default_chunks"] = DEFAULT_CONFIG["default_chunks"]
+    if not isinstance(config.get("default_quality"), str):
+        config["default_quality"] = DEFAULT_CONFIG["default_quality"]
+    if (
+        not isinstance(config.get("download_dir"), str)
+        or not config["download_dir"].strip()
+    ):
+        config["download_dir"] = DEFAULT_CONFIG["download_dir"]
     return config
 
 

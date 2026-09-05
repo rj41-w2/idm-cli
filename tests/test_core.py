@@ -109,3 +109,21 @@ def test_sanitize_filename():
     assert ">" not in result
     assert ":" not in result
     assert '"' not in result
+
+
+def test_sanitize_filename_handles_control_and_reserved_names():
+    assert sanitize_filename("CON\n") == "_CON"
+    assert "\n" not in sanitize_filename("hello\nworld")
+
+
+def test_config_rejects_invalid_user_values(tmp_path):
+    config_file = tmp_path / "config.json"
+    config_file.write_text(
+        '{"default_chunks": 999, "default_quality": 42, "download_dir": ""}',
+        encoding="utf-8",
+    )
+    with patch("idm_cli.config.CONFIG_FILE", str(config_file)):
+        config = load_config()
+    assert config["default_chunks"] == 8
+    assert config["default_quality"] == "720p"
+    assert config["download_dir"]

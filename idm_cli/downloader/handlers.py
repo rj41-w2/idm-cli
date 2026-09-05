@@ -116,7 +116,7 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
                 try:
                     extractor = get_extractor(url_to_extract)
                     info = extractor.fetch_all_info(url_to_extract)
-                except (ValueError, TypeError, OSError) as e:
+                except Exception as e:  # noqa: BLE001 - queue must continue safely
                     logger.error(f"Error fetching info: {e}")
                     show_error(str(e), "Error fetching info")
                     remove_download(tid)
@@ -140,7 +140,11 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
                         video_dest = ""
                     if not audio_url:
                         audio_dest = ""
-                except (ValueError, TypeError, OSError) as e:
+                    if not video_url and not audio_url:
+                        raise ValueError(
+                            "The queued format did not provide a downloadable URL."
+                        )
+                except Exception as e:  # noqa: BLE001 - queue must continue safely
                     logger.error(f"Error extracting URLs: {e}")
                     show_error(str(e), "Error extracting URLs")
                     remove_download(tid)
@@ -171,7 +175,7 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
                 show_error(str(e))
                 logger.error(f"Connection failed for {data['title']}: {e}")
                 break
-            except (ValueError, TypeError, OSError) as e:
+            except Exception as e:  # noqa: BLE001 - keep the queue daemon alive
                 logger.error(f"Download failed: {e}")
                 show_error(str(e), "Download failed")
                 remove_download(tid)

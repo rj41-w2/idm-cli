@@ -25,6 +25,7 @@ import time
 
 import questionary
 import typer
+from rich.markup import escape
 
 from idm_cli.ui.utils import console, custom_style
 
@@ -50,7 +51,7 @@ __all__ = [
 
 
 def show_initializing(url: str) -> None:
-    console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
+    console.print(f"[bold yellow]Initializing download for:[/] {escape(url)}\n")
 
 
 def show_resuming() -> None:
@@ -79,12 +80,12 @@ def show_download_cancelled() -> None:
 def show_success(media_type: str, final_dest: str) -> None:
     console.print("\n[bold green]✓[/] Downloads completed.")
     console.print(
-        f"\n[bold green] Success! {media_type} saved as:[/] [bold white]{final_dest}[/]"
+        f"\n[bold green] Success! {escape(media_type)} saved as:[/] [bold white]{escape(final_dest)}[/]"
     )
 
 
 def show_error(msg: str, label: str = "Error") -> None:
-    console.print(f"[bold red]{label}:[/] {msg}")
+    console.print(f"[bold red]{escape(label)}:[/] {escape(msg)}")
 
 
 # ── interactive prompts ────────────────────────────────────────────────────────
@@ -259,7 +260,7 @@ def show_queue_empty() -> None:
 
 
 def show_queue_item_start(title: str) -> None:
-    console.print(f"[bold yellow]Starting queued download:[/] {title}\n")
+    console.print(f"[bold yellow]Starting queued download:[/] {escape(title)}\n")
 
 
 def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
@@ -273,12 +274,9 @@ def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
 
     choices = []
     for tid, data in incomplete.items():
-        choices.append(
-            questionary.Choice(f"[Resume] {data['title']}", value=("resume", tid))
-        )
-        choices.append(
-            questionary.Choice(f"[Delete] {data['title']}", value=("delete", tid))
-        )
+        title = str(data.get("title", tid))
+        choices.append(questionary.Choice(f"[Resume] {title}", value=("resume", tid)))
+        choices.append(questionary.Choice(f"[Delete] {title}", value=("delete", tid)))
     choices.append(questionary.Choice("[Back to Main]", value=("back", None)))
 
     result = questionary.select(

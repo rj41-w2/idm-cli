@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import platform
@@ -65,11 +66,35 @@ async def download_ffmpeg() -> str:
 
     with console.status("[bold cyan]Downloading FFmpeg...", spinner="dots"):
         async with AsyncSession(impersonate="chrome120") as session:
+            release = await session.get(
+                "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest",
+                headers={"Accept": "application/vnd.github+json"},
+            )
+            release.raise_for_status()
+            asset_name = os.path.basename(url)
+            asset = next(
+                (
+                    item
+                    for item in release.json().get("assets", [])
+                    if item.get("name") == asset_name
+                ),
+                None,
+            )
+            digest = (asset or {}).get("digest", "")
+            if not digest.startswith("sha256:"):
+                raise RuntimeError("FFmpeg release did not provide a SHA-256 digest.")
+            expected_digest = digest[len("sha256:") :]
+            hasher = hashlib.sha256()
             async with session.stream("GET", url) as resp:
                 resp.raise_for_status()
                 async with aiofiles.open(archive_path, "wb") as f:
                     async for chunk in resp.aiter_content(chunk_size=1024 * 1024):
+                        hasher.update(chunk)
                         await f.write(chunk)
+            if hasher.hexdigest() != expected_digest:
+                raise RuntimeError(
+                    "Downloaded FFmpeg archive failed SHA-256 verification."
+                )
 
     bin_name = _ffmpeg_binary_name()
 
@@ -138,12 +163,22 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
         raise FileNotFoundError(f"Video file not found: {video_path}")
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
+    if os.path.abspath(output_path) in {
+        os.path.abspath(video_path),
+        os.path.abspath(audio_path),
+    }:
+        raise ValueError("Output path must differ from input media paths.")
 
     ffmpeg_bin = get_ffmpeg_path()
     if not ffmpeg_bin:
         raise RuntimeError("FFmpeg is not installed! Cannot mux files.")
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    work_output = f"{output_path}.part"
+    try:
+        os.remove(work_output)
+    except FileNotFoundError:
+        pass
 
     cmd = [
         ffmpeg_bin,
@@ -154,12 +189,13 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
         audio_path,
         "-c",
         "copy",
-        output_path,
+        work_output,
     ]
 
     try:
         logger.debug(f"Muxing {video_path} and {audio_path} into {output_path}")
         subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
+        os.replace(work_output, output_path)
 
         logger.debug("Muxing successful. Deleting original files.")
         try:
@@ -190,12 +226,18 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
         raise RuntimeError("FFmpeg is not installed! Cannot convert audio.")
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    work_output = f"{output_path}.part"
+    try:
+        os.remove(work_output)
+    except FileNotFoundError:
+        pass
 
-    cmd = [ffmpeg_bin, "-y", "-i", audio_path, "-q:a", "0", "-map", "a", output_path]
+    cmd = [ffmpeg_bin, "-y", "-i", audio_path, "-q:a", "0", "-map", "a", work_output]
 
     try:
         logger.debug(f"Converting {audio_path} into {output_path}")
         subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
+        os.replace(work_output, output_path)
 
         logger.debug("Conversion successful. Deleting original file.")
         try:

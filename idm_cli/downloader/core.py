@@ -42,6 +42,17 @@ from idm_cli.ui.utils import console, sanitize_filename
 __all__ = ["process_download", "run_download_and_mux"]
 
 
+def _available_path(path: str) -> str:
+    """Choose a non-destructive destination for a new download."""
+    if not os.path.exists(path):
+        return path
+    stem, suffix = os.path.splitext(path)
+    index = 1
+    while os.path.exists(f"{stem} ({index}){suffix}"):
+        index += 1
+    return f"{stem} ({index}){suffix}"
+
+
 def run_download_and_mux(
     video_url,
     audio_url,
@@ -148,6 +159,14 @@ def process_download(
                     raise typer.Exit(code=0)
                 return False
 
+            if (
+                format_id == "audio_only"
+                and extractor.__name__ != "idm_cli.extractors.ytdlp"
+            ):
+                raise ValueError(
+                    "Audio-only conversion is supported for video sites, not direct files."
+                )
+
             resolutions = []
             if not found_task_id and format_id != "audio_only":
                 resolutions = extractor.get_video_resolutions(info)
@@ -174,7 +193,11 @@ def process_download(
                     raise typer.Exit(code=1)
                 return False
 
-            console.print(f"[bold green]*[/] Fetched info for: [bold white]{title}[/]")
+            from rich.markup import escape
+
+            console.print(
+                f"[bold green]*[/] Fetched info for: [bold white]{escape(title)}[/]"
+            )
 
             selected_res = ask_quality(resolutions, loop_quality, format_id)
             if selected_res is None:
@@ -209,19 +232,24 @@ def process_download(
 
         tmp_dir = os.path.join(CONFIG_DIR, "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
+        tmp_stem = f"{safe_title}_{task_id}"
 
         if format_id == "direct_file":
-            video_dest = os.path.join(tmp_dir, safe_title)
+            video_dest = os.path.join(tmp_dir, tmp_stem)
             audio_dest = ""
-            final_dest = os.path.join(downloads_dir, safe_title)
+            final_dest = _available_path(os.path.join(downloads_dir, safe_title))
         elif format_id == "audio_only":
             video_dest = ""
-            audio_dest = os.path.join(tmp_dir, f"{safe_title}_audio.m4a")
-            final_dest = os.path.join(downloads_dir, f"{safe_title}.mp3")
+            audio_dest = os.path.join(tmp_dir, f"{tmp_stem}_audio.m4a")
+            final_dest = _available_path(
+                os.path.join(downloads_dir, f"{safe_title}.mp3")
+            )
         else:
-            video_dest = os.path.join(tmp_dir, f"{safe_title}_video.mp4")
-            audio_dest = os.path.join(tmp_dir, f"{safe_title}_audio.m4a")
-            final_dest = os.path.join(downloads_dir, f"{safe_title}.mp4")
+            video_dest = os.path.join(tmp_dir, f"{tmp_stem}_video.mp4")
+            audio_dest = os.path.join(tmp_dir, f"{tmp_stem}_audio.m4a")
+            final_dest = _available_path(
+                os.path.join(downloads_dir, f"{safe_title}.mp4")
+            )
 
         if loop_queue:
             save_download(
@@ -260,6 +288,10 @@ def process_download(
                 video_dest = ""
             if not audio_url:
                 audio_dest = ""
+            if not video_url and not audio_url:
+                raise ValueError(
+                    "The selected format did not provide a downloadable URL."
+                )
         except (ValueError, TypeError, OSError) as e:
             logger.error(f"Error extracting URLs: {e}")
             show_error(str(e), "Error extracting URLs")

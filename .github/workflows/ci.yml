@@ -25,4 +25,4 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
-      - run: python -m pytest
+      - run: python -m pytest --cov=idm_cli --cov-report=term-missing

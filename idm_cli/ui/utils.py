@@ -54,9 +54,14 @@ def is_valid_url(url: str) -> bool:
 
 
 def sanitize_filename(title: str) -> str:
-    safe = "".join(c for c in title if c not in r'<>:"/\|?*')
+    safe = "".join(c for c in title if c.isprintable() and c not in r'<>:"/\|?*')
     safe = safe.strip(". ")
-    return (safe[:60] or "download").strip()
+    safe = (safe[:60] or "download").strip()
+    if safe.upper() in {"CON", "PRN", "AUX", "NUL"} or (
+        safe.upper().startswith(("COM", "LPT")) and safe[3:].isdigit()
+    ):
+        safe = f"_{safe}"
+    return safe
 
 
 # ── non-blocking key press (used by progress_listener for p/r) ────────────────
@@ -75,24 +80,23 @@ except ImportError:
 
 
 def check_key_press():
-    if sys.platform == "win32":
-        if msvcrt and msvcrt.kbhit():
-            return msvcrt.getch().decode("utf-8", "ignore").lower()
-    else:
-        if (
-            "select" in sys.modules
-            and "termios" in sys.modules
-            and "tty" in sys.modules
-        ):
+    try:
+        if sys.platform == "win32":
+            if msvcrt and msvcrt.kbhit():
+                return msvcrt.getch().decode("utf-8", "ignore").lower()
+        elif all(name in sys.modules for name in ("select", "termios", "tty")):
             fd = sys.stdin.fileno()
             old_settings = termios.tcgetattr(fd)
             try:
-                tty.setcbreak(sys.stdin.fileno())
+                tty.setcbreak(fd)
                 dr, _dw, _de = select.select([sys.stdin], [], [], 0)
                 if dr:
                     return sys.stdin.read(1).lower()
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except (AttributeError, OSError, ValueError):
+        # stdin may be redirected or may not be a terminal (CI, pipes, cron).
+        return None
     return None
 
 
