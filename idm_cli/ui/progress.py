@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import re as _re
 
-import aiohttp
 from rich.console import Group
 from rich.live import Live
 from rich.progress import (
@@ -39,8 +38,8 @@ __all__ = ["progress_listener", "run_with_progress"]
 async def progress_listener(
     queue: asyncio.Queue,
     progress: Progress,
-    pause_event: asyncio.Event = None,
-    warning_state: dict = None,
+    pause_event: asyncio.Event | None = None,
+    warning_state: dict | None = None,
 ) -> None:
     """Drain the progress-update queue and advance the Rich progress bars."""
     while True:
@@ -96,7 +95,10 @@ async def run_with_progress(
     Run parallel downloads with a full Rich Live progress display.
     Lazy-imports download_file to avoid circular imports.
     """
-    from idm_cli.downloader.downloader import download_file  # lazy — avoids circular
+    from idm_cli.downloader.downloader import (
+        download_file,
+        make_session,
+    )  # lazy — avoids circular
 
     queue: asyncio.Queue = asyncio.Queue()
 
@@ -167,6 +169,7 @@ async def run_with_progress(
         # ── live loop ──────────────────────────────────────────────────────────
         results: list = []
         with Live(_build_display(), console=console, refresh_per_second=10) as live:
+
             async def _refresh_loop() -> None:
                 while True:
                     live.update(_build_display())
@@ -177,32 +180,40 @@ async def run_with_progress(
                 progress_listener(queue, progress, pause_event, warning_state)
             )
 
-            conn_limit = min(chunks * 2, 16)
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=None, sock_read=10),
-                connector=aiohttp.TCPConnector(
-                    limit=conn_limit, limit_per_host=conn_limit
-                ),
-            ) as session:
+            async with make_session() as session:
                 v_task = (
                     asyncio.create_task(
                         download_file(
-                            session, video_url, video_dest, headers,
-                            chunks, queue, video_task_id, pause_event,
+                            session,
+                            video_url,
+                            video_dest,
+                            headers,
+                            chunks,
+                            queue,
+                            video_task_id,
+                            pause_event,
                             on_chunk_done=_on_chunk_done,
                         )
                     )
-                    if video_url else None
+                    if video_url
+                    else None
                 )
                 a_task = (
                     asyncio.create_task(
                         download_file(
-                            session, audio_url, audio_dest, headers,
-                            chunks, queue, audio_task_id, pause_event,
+                            session,
+                            audio_url,
+                            audio_dest,
+                            headers,
+                            chunks,
+                            queue,
+                            audio_task_id,
+                            pause_event,
                             on_chunk_done=_on_chunk_done,
                         )
                     )
-                    if audio_url else None
+                    if audio_url
+                    else None
                 )
 
                 results = await asyncio.gather(

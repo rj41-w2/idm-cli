@@ -20,7 +20,7 @@ IDM-CLI splits files into multiple parallel chunks (default 8, up to 32) to maxi
 
 ## Features
 
-- **Parallel Chunk Engine** — Splits downloads into multiple concurrent chunks using `aiohttp` async sessions to fully saturate your bandwidth.
+- **Parallel Chunk Engine** — Splits downloads into multiple concurrent chunks using `curl-cffi` async sessions to fully saturate your bandwidth.
 - **Universal Downloader** — Paste any URL. yt-dlp handles 1000+ sites (YouTube, Facebook, Instagram, etc.), with automatic fallback to direct HTTP download for unsupported URLs.
 - **Audio Only / MP3 Conversion** — Download videos as audio. IDM-CLI automatically grabs the best audio stream and uses FFmpeg to convert it to `.mp3`.
 - **Smart Auto-Resume** — Internet dropped? Pressed `Ctrl+C`? No problem. IDM-CLI remembers the exact byte positions of all incomplete chunks. Paste the same link again to resume instantly.

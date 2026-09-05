@@ -7,6 +7,8 @@ All user-facing output is delegated to ui/prompts.py.
 The async progress display is handled by ui/progress.py via run_with_progress().
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import shutil
@@ -41,9 +43,17 @@ __all__ = ["process_download", "run_download_and_mux"]
 
 
 def run_download_and_mux(
-    video_url, audio_url, headers, chunks,
-    video_dest, audio_dest, final_dest,
-    media_type, pause_event, warning_state, title="",
+    video_url,
+    audio_url,
+    headers,
+    chunks,
+    video_dest,
+    audio_dest,
+    final_dest,
+    media_type,
+    pause_event,
+    warning_state,
+    title="",
 ):
     """Run the async download + mux pipeline synchronously."""
     from idm_cli.ui.progress import run_with_progress  # lazy — avoids circular
@@ -79,8 +89,8 @@ def process_download(
     loop_queue: bool,
     loop_chunks: int,
     loop_filename: str,
-    found_task_id: str = None,
-    found_task_data: dict = None,
+    found_task_id: str | None = None,
+    found_task_data: dict | None = None,
 ):
     url_to_extract = current_url
     title = ""
@@ -119,6 +129,7 @@ def process_download(
             except Exception:
                 if extractor.__name__ == "idm_cli.extractors.ytdlp":
                     import importlib
+
                     extractor = importlib.import_module("idm_cli.extractors.direct")
                     info = extractor.fetch_all_info(url_to_extract)
                 else:
@@ -147,7 +158,7 @@ def process_download(
             if not is_interactive:
                 raise typer.Exit(code=1)
             return False
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - convert extractor failures to CLI errors
             logger.error(f"Error fetching info: {e}")
             show_error(str(e))
             if not is_interactive:
@@ -171,7 +182,9 @@ def process_download(
                     raise typer.Exit(code=1)
                 return False
 
-            selected_format = next(r for r in resolutions if r["resolution"] == selected_res)
+            selected_format = next(
+                r for r in resolutions if r["resolution"] == selected_res
+            )
             format_id = selected_format["format_id"]
             needs_ffmpeg = not selected_format.get("pre_muxed", True)
         else:
@@ -211,7 +224,16 @@ def process_download(
             final_dest = os.path.join(downloads_dir, f"{safe_title}.mp4")
 
         if loop_queue:
-            save_download(task_id, url_to_extract, format_id, title, video_dest, audio_dest, final_dest, status="queued")
+            save_download(
+                task_id,
+                url_to_extract,
+                format_id,
+                title,
+                video_dest,
+                audio_dest,
+                final_dest,
+                status="queued",
+            )
             show_queued()
             if not is_interactive:
                 raise typer.Exit(code=0)
@@ -246,8 +268,14 @@ def process_download(
             return False
 
     save_download(
-        task_id, url_to_extract, format_id, title,
-        video_dest, audio_dest, final_dest, status="interrupted",
+        task_id,
+        url_to_extract,
+        format_id,
+        title,
+        video_dest,
+        audio_dest,
+        final_dest,
+        status="interrupted",
     )
 
     show_download_start(loop_chunks)
@@ -260,9 +288,17 @@ def process_download(
 
     try:
         run_download_and_mux(
-            video_url, audio_url, headers, loop_chunks,
-            video_dest, audio_dest, final_dest,
-            media_type, pause_event, warning_state, title=title,
+            video_url,
+            audio_url,
+            headers,
+            loop_chunks,
+            video_dest,
+            audio_dest,
+            final_dest,
+            media_type,
+            pause_event,
+            warning_state,
+            title=title,
         )
     except KeyboardInterrupt:
         show_download_cancelled()
@@ -278,7 +314,7 @@ def process_download(
         if not is_interactive:
             raise typer.Exit(code=1)
         return False
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - keep the CLI from printing a traceback
         # Catch-all for unexpected errors (e.g. aiohttp.ClientResponseError that
         # escaped retry logic). Show a clean message instead of a traceback.
         logger.error(f"Unexpected download error: {e}")

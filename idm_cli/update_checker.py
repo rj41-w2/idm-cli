@@ -1,16 +1,17 @@
-import os
 import json
+import os
+import re
 import time
 import urllib.request
-import subprocess
-import re
-import sys
-import questionary
+
 from rich.console import Console
+
 from idm_cli.config import logger
+
 
 def check_for_updates():
     from idm_cli.config import CONFIG_DIR
+
     config_dir = CONFIG_DIR
     last_check_file = os.path.join(config_dir, "last_check.json")
 
@@ -47,12 +48,15 @@ def check_for_updates():
     # Compare versions safely
     try:
         from packaging.version import parse
+
         is_newer = parse(latest_version) > parse(__version__)
     except ImportError:
         try:
+
             def _parse_ver(v):
-                parts = re.split(r'[^0-9]+', v)
+                parts = re.split(r"[^0-9]+", v)
                 return tuple(int(p) for p in parts if p.isdigit()) or (0,)
+
             is_newer = _parse_ver(latest_version) > _parse_ver(__version__)
         except (ValueError, TypeError) as e:
             logger.debug(f"Version comparison fallback: {e}")
@@ -60,9 +64,13 @@ def check_for_updates():
 
     if is_newer:
         console = Console()
-        console.print(f"\n[bold yellow]A new version of IDM-CLI ({latest_version}) is available![/bold yellow]")
-        
-        console.print("\n[bold cyan]Please close this app and run the following command in your terminal to update:[/bold cyan]")
+        console.print(
+            f"\n[bold yellow]A new version of IDM-CLI ({latest_version}) is available![/bold yellow]"
+        )
+
+        console.print(
+            "\n[bold cyan]Please close this app and run the following command in your terminal to update:[/bold cyan]"
+        )
         console.print("  [bold green]pip install --upgrade idm-cli[/bold green]\n")
 
     # Finally, write the current time.time() to last_check.json

@@ -1,11 +1,9 @@
 typer
 rich
-aiohttp
+curl-cffi>=0.7.0
 aiofiles
 yt-dlp
 pyfiglet
 questionary
-aiodns
-Brotli
 psutil
 platformdirs

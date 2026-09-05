@@ -20,13 +20,11 @@ classifiers = [
 dependencies = [
     "typer",
     "rich",
-    "aiohttp",
+    "curl-cffi>=0.7.0",
     "aiofiles",
     "yt-dlp",
     "pyfiglet",
     "questionary",
-    "aiodns",
-    "Brotli",
     "psutil",
     "platformdirs",
 ]
@@ -36,6 +34,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "packaging",
+    "ruff",
 ]
 
 [project.urls]
@@ -43,3 +42,6 @@ Homepage = "https://github.com/rj41-w2/idm-cli"
 
 [project.scripts]
 idm = "idm_cli.ui.cli:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

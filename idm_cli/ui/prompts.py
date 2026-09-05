@@ -48,6 +48,7 @@ __all__ = [
 
 # ── status messages ────────────────────────────────────────────────────────────
 
+
 def show_initializing(url: str) -> None:
     console.print(f"[bold yellow]Initializing download for:[/] {url}\n")
 
@@ -88,13 +89,18 @@ def show_error(msg: str, label: str = "Error") -> None:
 
 # ── interactive prompts ────────────────────────────────────────────────────────
 
-def ask_quality(resolutions: list[dict], loop_quality: str, format_id: str) -> str | None:
+
+def ask_quality(
+    resolutions: list[dict], loop_quality: str, format_id: str
+) -> str | None:
     """
     Return the selected resolution string, or None if user cancelled.
     If loop_quality is set or only one resolution exists, auto-selects.
     """
     if loop_quality or len(resolutions) == 1:
-        matched = next((r for r in resolutions if r["resolution"] == loop_quality), None)
+        matched = next(
+            (r for r in resolutions if r["resolution"] == loop_quality), None
+        )
         return matched["resolution"] if matched else resolutions[0]["resolution"]
 
     choices = [r.get("display_label", r["resolution"]) for r in resolutions]
@@ -126,7 +132,9 @@ def ask_ffmpeg_install(is_interactive: bool) -> str:
     if not is_interactive:
         return "auto"
 
-    console.print("[bold yellow]High quality video/audio processing requires FFmpeg.[/]")
+    console.print(
+        "[bold yellow]High quality video/audio processing requires FFmpeg.[/]"
+    )
 
     _sys = platform.system()
     choices = [
@@ -167,20 +175,26 @@ def install_ffmpeg(method: str, is_interactive: bool) -> bool:
         try:
             asyncio.run(download_ffmpeg())
             return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - downloader libraries use varied errors
             show_error(str(e), "Failed to download FFmpeg")
             return False
 
     if method == "winget":
         try:
-            with console.status("[bold cyan]Installing FFmpeg via winget...", spinner="dots"):
+            with console.status(
+                "[bold cyan]Installing FFmpeg via winget...", spinner="dots"
+            ):
                 subprocess.run(
                     [
-                        "winget", "install", "ffmpeg",
+                        "winget",
+                        "install",
+                        "ffmpeg",
                         "--accept-package-agreements",
                         "--accept-source-agreements",
                     ],
-                    check=True, shell=False, timeout=120,
+                    check=True,
+                    shell=False,
+                    timeout=120,
                 )
             console.print("[bold green]FFmpeg installed successfully via winget![/]")
             console.print(
@@ -188,33 +202,47 @@ def install_ffmpeg(method: str, is_interactive: bool) -> bool:
                 "to apply the PATH changes and run your command again.[/]"
             )
             raise typer.Exit(code=0)
-        except Exception as e:
+        except typer.Exit:
+            raise
+        except (OSError, subprocess.SubprocessError) as e:
             show_error(str(e), "Failed to install via winget")
             return False
 
     if method == "brew":
         try:
-            with console.status("[bold cyan]Installing FFmpeg via brew...", spinner="dots"):
+            with console.status(
+                "[bold cyan]Installing FFmpeg via brew...", spinner="dots"
+            ):
                 subprocess.run(
                     ["brew", "install", "ffmpeg"],
-                    check=True, shell=False, timeout=120,
+                    check=True,
+                    shell=False,
+                    timeout=120,
                 )
             console.print("[bold green]FFmpeg installed successfully via brew![/]")
             raise typer.Exit(code=0)
-        except Exception as e:
+        except typer.Exit:
+            raise
+        except (OSError, subprocess.SubprocessError) as e:
             show_error(str(e), "Failed to install via brew")
             return False
 
     if method == "apt":
         try:
-            with console.status("[bold cyan]Installing FFmpeg via apt...", spinner="dots"):
+            with console.status(
+                "[bold cyan]Installing FFmpeg via apt...", spinner="dots"
+            ):
                 subprocess.run(
                     ["sudo", "apt", "install", "-y", "ffmpeg"],
-                    check=True, shell=False, timeout=120,
+                    check=True,
+                    shell=False,
+                    timeout=120,
                 )
             console.print("[bold green]FFmpeg installed successfully via apt![/]")
             raise typer.Exit(code=0)
-        except Exception as e:
+        except typer.Exit:
+            raise
+        except (OSError, subprocess.SubprocessError) as e:
             show_error(str(e), "Failed to install via apt")
             return False
 
@@ -245,8 +273,12 @@ def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
 
     choices = []
     for tid, data in incomplete.items():
-        choices.append(questionary.Choice(f"[Resume] {data['title']}", value=("resume", tid)))
-        choices.append(questionary.Choice(f"[Delete] {data['title']}", value=("delete", tid)))
+        choices.append(
+            questionary.Choice(f"[Resume] {data['title']}", value=("resume", tid))
+        )
+        choices.append(
+            questionary.Choice(f"[Delete] {data['title']}", value=("delete", tid))
+        )
     choices.append(questionary.Choice("[Back to Main]", value=("back", None)))
 
     result = questionary.select(
@@ -266,6 +298,7 @@ def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
 
 
 # ── Ctrl+C double-press handler ────────────────────────────────────────────────
+
 
 def setup_ctrl_c(warning_state: dict):
     """

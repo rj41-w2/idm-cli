@@ -6,13 +6,23 @@ from logging.handlers import RotatingFileHandler
 
 from platformdirs import user_data_dir, user_downloads_dir
 
-__all__ = ["CONFIG_DIR", "CONFIG_FILE", "load_config", "logger", "mute_console_logging", "save_config", "setup_logging", "unmute_console_logging"]
+__all__ = [
+    "CONFIG_DIR",
+    "CONFIG_FILE",
+    "load_config",
+    "logger",
+    "mute_console_logging",
+    "save_config",
+    "setup_logging",
+    "unmute_console_logging",
+]
 
 APP_NAME = "idm-cli"
 APP_AUTHOR = "idm-cli"
 CONFIG_DIR = user_data_dir(APP_NAME, APP_AUTHOR)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 LOG_FILE = os.path.join(CONFIG_DIR, "idm.log")
+
 
 def _migrate_old_config() -> None:
     old_dir = os.path.expanduser("~/.idm_cli")
@@ -35,26 +45,42 @@ def _migrate_old_config() -> None:
             except OSError:
                 pass
 
+
 def _get_default_download_dir() -> str:
     return user_downloads_dir()
 
+
 def setup_logging() -> logging.Logger:
-    _migrate_old_config()
-    os.makedirs(CONFIG_DIR, exist_ok=True)
     logger = logging.getLogger("idm_cli")
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
 
-        file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=2, encoding="utf-8")
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        try:
+            _migrate_old_config()
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            file_handler = RotatingFileHandler(
+                LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=2, encoding="utf-8"
+            )
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+        except OSError:
+            # Logging must never prevent the CLI from starting (for example in a
+            # read-only home directory or a restricted CI environment).
+            pass
 
         stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)
         stream_handler.setFormatter(formatter)
-        stream_handler.stream.reconfigure(errors="backslashreplace")
+        try:
+            stream_handler.stream.reconfigure(errors="backslashreplace")
+        except AttributeError:
+            pass
         logger.addHandler(stream_handler)
     return logger
+
 
 logger = setup_logging()
 
@@ -62,8 +88,9 @@ DEFAULT_CONFIG = {
     "default_chunks": 8,
     "default_quality": "720p",
     "download_dir": _get_default_download_dir(),
-    "last_version": "0.0.0"
+    "last_version": "0.0.0",
 }
+
 
 def load_config() -> dict:
     config = DEFAULT_CONFIG.copy()
@@ -75,6 +102,7 @@ def load_config() -> dict:
         except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"Failed to load config: {e}")
     return config
+
 
 def save_config(config_data: dict) -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -89,7 +117,9 @@ def mute_console_logging() -> None:
     """Remove the StreamHandler from the logger so logs go to file only (used during active downloads)."""
     _logger = logging.getLogger("idm_cli")
     for handler in list(_logger.handlers):
-        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler):
+        if isinstance(handler, logging.StreamHandler) and not isinstance(
+            handler, RotatingFileHandler
+        ):
             _logger.removeHandler(handler)
 
 
@@ -101,7 +131,9 @@ def unmute_console_logging() -> None:
         for h in _logger.handlers
     )
     if not has_stream:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(formatter)
         try:

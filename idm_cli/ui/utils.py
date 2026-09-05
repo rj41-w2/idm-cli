@@ -13,6 +13,7 @@ Shared UI utilities:
 
 import asyncio
 import sys
+from urllib.parse import urlsplit
 
 import questionary
 from prompt_toolkit.lexers import Lexer
@@ -37,12 +38,19 @@ BLOCKED_KEYWORDS = ("javascript:", "data:", "file://", "ftp://")
 
 def is_valid_url(url: str) -> bool:
     lower = url.strip().lower()
-    if not lower.startswith(ALLOWED_SCHEMES):
+    if not lower.startswith(ALLOWED_SCHEMES) or len(url) > 2048:
         return False
     for kw in BLOCKED_KEYWORDS:
-        if kw in lower:
+        if lower.startswith(kw):
             return False
-    return len(url) <= 2048
+    candidate = url.strip()
+    if lower.startswith("www."):
+        candidate = f"https://{candidate}"
+    try:
+        parsed = urlsplit(candidate)
+        return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+    except ValueError:
+        return False
 
 
 def sanitize_filename(title: str) -> str:
@@ -71,7 +79,11 @@ def check_key_press():
         if msvcrt and msvcrt.kbhit():
             return msvcrt.getch().decode("utf-8", "ignore").lower()
     else:
-        if "select" in sys.modules and "termios" in sys.modules and "tty" in sys.modules:
+        if (
+            "select" in sys.modules
+            and "termios" in sys.modules
+            and "tty" in sys.modules
+        ):
             fd = sys.stdin.fileno()
             old_settings = termios.tcgetattr(fd)
             try:
@@ -115,7 +127,9 @@ def check_first_run() -> None:
 
     if __version__ != last_version:
         if __version__ in CHANGELOG:
-            console.print(f"\n[bold cyan]*** What's New in v{__version__} ***[/bold cyan]")
+            console.print(
+                f"\n[bold cyan]*** What's New in v{__version__} ***[/bold cyan]"
+            )
             for change in CHANGELOG[__version__]:
                 console.print(f"  [bold cyan]*[/bold cyan] {change}")
             console.print()
@@ -140,6 +154,7 @@ custom_style = questionary.Style(
 
 # ── prompt_toolkit lexer for the interactive prompt ───────────────────────────
 
+
 class IDMLexer(Lexer):
     def lex_document(self, document):
         def get_line(lineno):
@@ -155,6 +170,7 @@ class IDMLexer(Lexer):
 # ── progress_listener is in ui/progress.py ────────────────────────────────────
 # Kept here as a re-export for backwards compatibility with any external callers.
 
+
 async def progress_listener(
     queue: asyncio.Queue,
     progress: Progress,
@@ -162,4 +178,5 @@ async def progress_listener(
     warning_state=None,
 ) -> None:
     from idm_cli.ui.progress import progress_listener as _pl
+
     await _pl(queue, progress, pause_event, warning_state)

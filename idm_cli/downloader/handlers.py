@@ -31,6 +31,7 @@ LOCK_FILE = os.path.join(CONFIG_DIR, "queue.lock")
 
 # ── queue lock helpers ─────────────────────────────────────────────────────────
 
+
 def _is_daemon_running() -> bool:
     if not os.path.exists(LOCK_FILE):
         return False
@@ -81,6 +82,7 @@ def _release_lock() -> None:
 
 
 # ── queue handler ──────────────────────────────────────────────────────────────
+
 
 def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
     if not _acquire_lock():
@@ -150,9 +152,16 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
 
             try:
                 run_download_and_mux(
-                    video_url, audio_url, headers, loop_chunks,
-                    video_dest, audio_dest, final_dest,
-                    media_type, pause_event, warning_state,
+                    video_url,
+                    audio_url,
+                    headers,
+                    loop_chunks,
+                    video_dest,
+                    audio_dest,
+                    final_dest,
+                    media_type,
+                    pause_event,
+                    warning_state,
                 )
                 remove_download(tid)
                 show_success(media_type, final_dest)
@@ -174,6 +183,7 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
 
 
 # ── resume handler ─────────────────────────────────────────────────────────────
+
 
 def handle_resume(is_interactive: bool):
     """
