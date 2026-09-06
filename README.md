@@ -109,22 +109,36 @@ python -m idm_cli
 
 ```
 idm_cli/
-├── config.py                # Platform-aware config, logging, paths
+├── __init__.py              # Package version (currently 1.3.3)
+├── __main__.py              # python -m idm_cli entry point
+├── config.py                # Platform-aware config, logging, and paths
 ├── update_checker.py        # PyPI version check
 ├── ui/
-│   ├── cli.py               # Main interactive CLI
-│   └── utils.py             # Console, progress listener, validators
+│   ├── cli.py               # Typer entry point and interactive command loop
+│   ├── prompts.py           # Questionary prompts and user-facing messages
+│   ├── progress.py          # Rich progress display and pause/resume controls
+│   └── utils.py             # URL validation, filename safety, and terminal helpers
 ├── downloader/
-│   ├── core.py              # Download orchestration & FFmpeg setup
-│   ├── downloader.py        # Async chunk download engine
+│   ├── core.py              # Download orchestration and destination management
+│   ├── downloader.py        # Async ranged downloads, retries, and resume validation
 │   ├── handlers.py          # Queue & resume handlers
-│   ├── muxer.py             # FFmpeg mux/conversion
-│   └── state.py             # Atomic JSON state persistence
+│   ├── muxer.py             # FFmpeg verification, muxing, and conversion
+│   └── state.py             # Locked, atomic JSON state persistence
 ├── extractors/
+│   ├── __init__.py           # Direct HTTP probe and extractor selection
 │   ├── ytdlp.py             # YouTube/social media extractor
-│   ├── direct.py            # Direct HTTP file downloader
-│   └── winget.py            # Windows Package Manager extractor
+│   ├── direct.py             # Direct HTTP file metadata and URL extraction
+│   └── winget.py             # Windows Package Manager metadata extraction
+└── tests/
+    ├── test_core.py          # State, config, extractor, and utility tests
+    └── test_regressions.py   # Downloader and URL validation regression tests
 ```
+
+The download flow is: `cli.py` selects the extractor, `core.py` prepares the
+destination and media pipeline, `downloader.py` downloads validated byte ranges,
+`progress.py` renders live progress, and `muxer.py` creates the final media file.
+Interrupted downloads are tracked under the platform-specific application data
+directory, not inside the repository.
 
 ## Contributing
 

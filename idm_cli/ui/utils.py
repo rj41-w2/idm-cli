@@ -106,7 +106,12 @@ console = Console()
 
 # ── changelog / first-run notice ──────────────────────────────────────────────
 
+
 CHANGELOG = {
+    "1.3.3": [
+        "Hardened range downloads and resume validation to prevent corrupted files.",
+        "Improved state locking, safe filenames, atomic media output, and FFmpeg verification.",
+    ],
     "1.3.0": [
         "Critical security fix: patched command injection vulnerability in winget extractor.",
         "Added URL validation to block unsafe schemes (file://, javascript:, data://, ftp://).",
