@@ -2,6 +2,47 @@
 
 All notable changes to IDM-CLI are documented here.
 
+## [1.3.4] - 2026-10-11
+
+### Fixed
+
+- **Downloads failed with HTTP 403** on servers that reject the impersonated
+  Chrome User-Agent: chunks now retry with a fallback User-Agent.
+- **Resume broke for direct files**: the extractor was resolved twice, and the
+  flaky network probe could return a different extractor the second time
+  ("did not provide a downloadable URL"). The extractor is now resolved once and
+  reused; saved direct-file tasks never re-probe.
+- **FFmpeg muxing failed (exit 234)**: the temp output kept a `.part` extension,
+  so ffmpeg could not infer the container format. The temp file now preserves
+  the real extension and is renamed atomically.
+- **Quality menu never appeared**: the default YouTube player clients exposed
+  only 360p, so a single "resolution" auto-selected silently. The extractor now
+  tries several clients and keeps the one with the most resolutions
+  (1080p/720p/... when available).
+- **Non-TTY crash**: `check_key_press()` raised `termios.error` (not an
+  `OSError`) when stdin was a pipe/file, killing downloads in scripts/CI.
+- Corrupted resume metadata no longer aborts the download; it resets the chunk.
+- `0`-byte files and `bool` chunk counts are handled correctly.
+
+### Changed
+
+- Interactive runs now prompt for quality whenever a real terminal is available
+  (previously `idm <url>` silently used the configured default). The configured
+  default is marked `(default)` and pre-selected; `-q`/`-a` still skip the prompt.
+- FFmpeg failures now show a short, single-line message; the full ffmpeg output
+  goes to the log file only.
+
+### Security
+
+- SSRF: `is_valid_url()` now rejects private/loopback/link-local/reserved hosts
+  (localhost, 127.0.0.1, 10/8, 192.168/16, 169.254.169.254, IPv6 equivalents).
+- Rich markup injection: user- and metadata-controlled strings are escaped.
+
+### Tests and CI
+
+- Test suite grew from 15 to 69 tests (muxer, progress, extractors, core/handlers,
+  quality-prompt behaviour, SSRF, muxing regressions).
+
 ## [1.3.3] - 2026-09-06
 
 ### Fixed

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import random
 import re
 
 import aiofiles
@@ -26,12 +27,18 @@ __all__ = ["download_file", "make_session"]
 
 # Browser impersonation — makes TLS fingerprint look like Chrome
 _IMPERSONATE = "chrome120"
+# Fallback User-Agent for servers that reject the impersonated Chrome UA
+_FALLBACK_UA = "curl/8.0"
 MIN_CHUNKS = 1
 MAX_CHUNKS = 32
 
 
 class _RetryableDownloadError(RuntimeError):
     """A response ended before the requested byte range was complete."""
+
+
+class _FallbackRetryNeeded(Exception):
+    """Internal signal: retry the range probe with the fallback User-Agent."""
 
 
 def make_session() -> AsyncSession:
@@ -58,6 +65,7 @@ async def _download_chunk(
     max_retries = 10
     retry_count = 0
     progress_file = f"{dest_path}.progress.json"
+    using_fallback_ua = False
 
     while retry_count < max_retries:
         try:
@@ -65,7 +73,9 @@ async def _download_chunk(
                 chunk_progress.get(str(chunk_index), 0) if chunk_progress else 0
             )
             if not isinstance(existing_size, int) or existing_size < 0:
-                raise ValueError("Invalid resume metadata for download chunk.")
+                existing_size = 0
+                if chunk_progress is not None:
+                    chunk_progress[str(chunk_index)] = 0
             current_start = start + existing_size
 
             if end is not None and current_start > end:
@@ -80,8 +90,17 @@ async def _download_chunk(
                 else:
                     chunk_headers["Range"] = f"bytes={current_start}-{end}"
             chunk_headers["Accept-Encoding"] = "identity"
+            if using_fallback_ua:
+                chunk_headers["User-Agent"] = _FALLBACK_UA
 
             async with session.stream("GET", url, headers=chunk_headers) as response:
+                if response.status_code in (401, 403) and not using_fallback_ua:
+                    using_fallback_ua = True
+                    logger.warning(
+                        f"Server returned HTTP {response.status_code}; "
+                        f"retrying chunk {chunk_index} with fallback User-Agent"
+                    )
+                    continue
                 response.raise_for_status()
                 if use_range and response.status_code != 206:
                     raise ValueError(
@@ -110,15 +129,10 @@ async def _download_chunk(
                 async with aiofiles.open(dest_path, "r+b") as f:
                     await f.seek(current_start)
 
-                    total_bytes = end - current_start + 1 if end is not None else 0
-                    buffer_size = 1024 * 1024
-                    if total_bytes > 50 * 1024 * 1024:
-                        buffer_size = 4 * 1024 * 1024
-                    elif 0 < total_bytes < 5 * 1024 * 1024:
-                        buffer_size = 256 * 1024
-
                     received_bytes = 0
-                    async for chunk in response.aiter_content(chunk_size=buffer_size):
+                    # NOTE: curl_cffi ignores aiter_content(chunk_size=...), so we
+                    # read whatever chunks the transport yields.
+                    async for chunk in response.aiter_content():
                         if pause_event is not None:
                             await pause_event.wait()
                         if not chunk:
@@ -195,7 +209,8 @@ async def _download_chunk(
             logger.warning(
                 f"Chunk {chunk_index} retry {retry_count}/{max_retries}: {e}"
             )
-            await asyncio.sleep(10)
+            delay = min(10 * (2 ** (retry_count - 1)), 60)
+            await asyncio.sleep(delay + random.uniform(0, 1))
 
 
 async def download_file(
@@ -216,7 +231,11 @@ async def download_file(
       {'task_id': ..., 'bytes_downloaded': N}
     on_chunk_done(chunk_index) called when a chunk completes.
     """
-    if not isinstance(num_chunks, int) or not MIN_CHUNKS <= num_chunks <= MAX_CHUNKS:
+    if (
+        isinstance(num_chunks, bool)
+        or not isinstance(num_chunks, int)
+        or not MIN_CHUNKS <= num_chunks <= MAX_CHUNKS
+    ):
         raise ValueError(
             f"chunks must be an integer between {MIN_CHUNKS} and {MAX_CHUNKS}"
         )
@@ -298,6 +317,9 @@ async def download_file(
         probe_headers["Range"] = "bytes=0-0"
         probe_headers["Accept-Encoding"] = "identity"
         async with session.stream("GET", url, headers=probe_headers) as response:
+            if response.status_code in (401, 403):
+                probe_headers["User-Agent"] = _FALLBACK_UA
+                raise _FallbackRetryNeeded()
             response.raise_for_status()
             content_range = response.headers.get("Content-Range", "")
             match = re.fullmatch(r"bytes 0-0/(\d+)", content_range)
@@ -308,13 +330,33 @@ async def download_file(
                 cl = response.headers.get("Content-Length")
                 if cl:
                     file_size = int(cl)
+    except _FallbackRetryNeeded:
+        try:
+            async with session.stream("GET", url, headers=probe_headers) as response:
+                response.raise_for_status()
+                content_range = response.headers.get("Content-Range", "")
+                match = re.fullmatch(r"bytes 0-0/(\d+)", content_range)
+                if response.status_code == 206 and match:
+                    file_size = int(match.group(1))
+                    supports_ranges = True
+                else:
+                    cl = response.headers.get("Content-Length")
+                    if cl:
+                        file_size = int(cl)
+        except RequestsError:
+            pass
     except RequestsError:
         pass
 
-    if not file_size:
+    if file_size is None:
         try:
             response = await session.head(url, headers=headers)
             try:
+                if response.status_code in (401, 403):
+                    response.close()
+                    response = await session.head(
+                        url, headers={**headers, "User-Agent": _FALLBACK_UA}
+                    )
                 response.raise_for_status()
                 cl = response.headers.get("Content-Length")
                 if cl:
@@ -335,7 +377,7 @@ async def download_file(
                     pass
 
     # ── invalidate stale partial progress ─────────────────────────────────────
-    if file_size and chunk_progress:
+    if file_size is not None and chunk_progress:
         total_existing = sum(chunk_progress.values())
         file_size_changed = (
             os.path.exists(dest_path) and os.path.getsize(dest_path) != file_size
@@ -350,14 +392,14 @@ async def download_file(
                         pass
 
     # ── pre-allocate file ──────────────────────────────────────────────────────
-    if file_size and not os.path.exists(dest_path):
+    if file_size is not None and not os.path.exists(dest_path):
         async with aiofiles.open(dest_path, "wb") as f:
             await f.truncate(file_size)
         async with aiofiles.open(progress_file, "w") as pf:
             await pf.write("{}")
 
     # ── fallback: no Content-Length → single chunk ─────────────────────────────
-    if not file_size or not supports_ranges:
+    if file_size is None or not supports_ranges:
         await _download_chunk(
             session,
             url,
@@ -408,7 +450,7 @@ async def download_file(
                 )
 
     # ── parallel chunk download ────────────────────────────────────────────────
-    num_chunks = min(num_chunks, file_size)
+    num_chunks = max(1, min(num_chunks, file_size))
     chunk_size = file_size // num_chunks
     chunk_lock = asyncio.Lock()
     tasks = []

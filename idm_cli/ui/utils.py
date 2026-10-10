@@ -12,6 +12,7 @@ Shared UI utilities:
 """
 
 import asyncio
+import ipaddress
 import sys
 from urllib.parse import urlsplit
 
@@ -36,6 +37,33 @@ ALLOWED_SCHEMES = ("http://", "https://", "www.")
 BLOCKED_KEYWORDS = ("javascript:", "data:", "file://", "ftp://")
 
 
+def _is_public_host(host: str) -> bool:
+    """Return True if *host* is not a private/loopback/link-local/reserved name or IP.
+
+    Only literal IPs are inspected — no DNS resolution is performed, so this
+    function is safe to call in offline/test environments.
+    """
+    h = host.strip().lower()
+    if not h:
+        return False
+    # Reject well-known internal hostnames
+    if h == "localhost" or h.endswith((".localhost", ".local", ".internal")):
+        return False
+    # If it's an IP literal, reject non-public addresses
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        # Not an IP literal — a regular hostname; allow it (DNS is not resolved)
+        return True
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
 def is_valid_url(url: str) -> bool:
     lower = url.strip().lower()
     if not lower.startswith(ALLOWED_SCHEMES) or len(url) > 2048:
@@ -48,7 +76,9 @@ def is_valid_url(url: str) -> bool:
         candidate = f"https://{candidate}"
     try:
         parsed = urlsplit(candidate)
-        return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return False
+        return _is_public_host(parsed.hostname)
     except ValueError:
         return False
 
@@ -75,8 +105,11 @@ try:
     import select
     import termios
     import tty
+
+    # termios.error is NOT a subclass of OSError, so it must be listed explicitly.
+    _TTY_ERRORS = (termios.error,)
 except ImportError:
-    pass
+    _TTY_ERRORS = ()
 
 
 def check_key_press():
@@ -86,6 +119,11 @@ def check_key_press():
                 return msvcrt.getch().decode("utf-8", "ignore").lower()
         elif all(name in sys.modules for name in ("select", "termios", "tty")):
             fd = sys.stdin.fileno()
+            if not sys.stdin.isatty():
+                # stdin is a pipe/file (CI, cron, redirected input): there is no
+                # terminal to read single key presses from. termios.tcgetattr on a
+                # non-tty raises termios.error, which is NOT an OSError subclass.
+                return None
             old_settings = termios.tcgetattr(fd)
             try:
                 tty.setcbreak(fd)
@@ -94,7 +132,7 @@ def check_key_press():
                     return sys.stdin.read(1).lower()
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    except (AttributeError, OSError, ValueError):
+    except (AttributeError, OSError, ValueError, *_TTY_ERRORS):
         # stdin may be redirected or may not be a terminal (CI, pipes, cron).
         return None
     return None

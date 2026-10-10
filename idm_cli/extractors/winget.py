@@ -22,7 +22,7 @@ def fetch_all_info(url: str) -> dict:
     if len(parts) >= 3 and parts[1].lower() == "install":
         cmd = f"{parts[0]} show {parts[2]}"
     else:
-        cmd = url.strip().replace("install", "show", 1)
+        cmd = url.strip()
 
     try:
         args = shlex.split(cmd, posix=False)
@@ -64,7 +64,7 @@ def fetch_all_info(url: str) -> dict:
             title = id_match.group(1)
         else:
             parts = url.split()
-            if len(parts) > 2 and parts[1] == "install":
+            if len(parts) > 2 and parts[1].lower() == "install":
                 title = parts[2].replace("--", "")
             else:
                 title = "winget_download"

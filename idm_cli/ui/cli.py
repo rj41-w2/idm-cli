@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import shlex
+import sys
 import time
 
 import pyfiglet
 import questionary
 import typer
+from rich.markup import escape
 from rich.table import Table
 
 from idm_cli import __version__
@@ -70,7 +72,7 @@ def download(
         logger.debug("Update check failed", exc_info=True)
 
     if url and not url.strip().lower().startswith("winget ") and not is_valid_url(url):
-        console.print(f"[bold red]Invalid or unsafe URL:[/] {url.strip()}")
+        console.print(f"[bold red]Invalid or unsafe URL:[/] {escape(url.strip())}")
         console.print("[dim white]Only HTTP/HTTPS URLs are allowed.[/dim white]")
         raise typer.Exit(code=1)
 
@@ -145,7 +147,7 @@ def download(
                 urls = [u for u in unknown if not u.startswith("-")]
                 if urls:
                     current_url = urls[0]
-            except Exception:  # noqa: BLE001 - malformed interactive flags are ignored
+            except (Exception, SystemExit):  # noqa: BLE001 - malformed interactive flags are ignored
                 logger.debug("Could not parse interactive flags", exc_info=True)
 
         if is_interactive and current_url:
@@ -161,7 +163,9 @@ def download(
             is_winget = lower.startswith("winget ")
             is_flag_only = lower.startswith("-")
             if not is_url and not is_known_cmd and not is_winget and not is_flag_only:
-                console.print(f"[bold red]Unknown command:[/] {current_url.strip()}")
+                console.print(
+                    f"[bold red]Unknown command:[/] {escape(current_url.strip())}"
+                )
                 console.print(
                     "[dim white]Type 'help' to see available commands.[/dim white]\n"
                 )
@@ -175,7 +179,15 @@ def download(
             or loop_video_only
             or loop_queue
         )
-        if fast_mode and not loop_quality and not loop_audio_only:
+        # Only fall back to the configured default quality when there is no
+        # interactive terminal to prompt on (pipes, cron, CI). With a real TTY
+        # the user is asked to choose a quality unless -q/-a was given.
+        if (
+            fast_mode
+            and not loop_quality
+            and not loop_audio_only
+            and not sys.stdin.isatty()
+        ):
             loop_quality = global_config.get("default_quality", "720p")
 
         if current_url.strip().lower() == "help":
@@ -256,7 +268,9 @@ def download(
             and not current_url.strip().lower().startswith("winget ")
             and not is_valid_url(current_url)
         ):
-            console.print(f"[bold red]Invalid or unsafe URL:[/] {current_url.strip()}")
+            console.print(
+                f"[bold red]Invalid or unsafe URL:[/] {escape(current_url.strip())}"
+            )
             console.print("[dim white]Only HTTP/HTTPS URLs are allowed.[/dim white]\n")
             current_url = None
             continue

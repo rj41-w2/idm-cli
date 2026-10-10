@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 from logging.handlers import RotatingFileHandler
 
 from platformdirs import user_data_dir, user_downloads_dir
@@ -120,8 +121,19 @@ def load_config() -> dict:
 def save_config(config_data: dict) -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
     try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config_data, f, indent=4)
+        fd, temp_path = tempfile.mkstemp(
+            dir=CONFIG_DIR, prefix="config_", suffix=".json"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(config_data, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, CONFIG_FILE)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise
     except OSError as e:
         logger.error(f"Failed to save config: {e}")
 
@@ -148,6 +160,9 @@ def unmute_console_logging() -> None:
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
         stream_handler = logging.StreamHandler()
+        # Match setup_logging(): without this the handler defaults to NOTSET and
+        # leaks DEBUG lines (e.g. the ffmpeg command) to the user's console.
+        stream_handler.setLevel(logging.INFO)
         stream_handler.setFormatter(formatter)
         try:
             stream_handler.stream.reconfigure(errors="backslashreplace")

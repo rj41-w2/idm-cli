@@ -69,6 +69,7 @@ async def progress_listener(
             continue
 
         if update is None:
+            queue.task_done()  # mark sentinel as done too
             break  # sentinel — download finished
 
         task_id = update.get("task_id")
@@ -180,54 +181,61 @@ async def run_with_progress(
                 progress_listener(queue, progress, pause_event, warning_state)
             )
 
-            async with make_session() as session:
-                v_task = (
-                    asyncio.create_task(
-                        download_file(
-                            session,
-                            video_url,
-                            video_dest,
-                            headers,
-                            chunks,
-                            queue,
-                            video_task_id,
-                            pause_event,
-                            on_chunk_done=_on_chunk_done,
-                        )
-                    )
-                    if video_url
-                    else None
-                )
-                a_task = (
-                    asyncio.create_task(
-                        download_file(
-                            session,
-                            audio_url,
-                            audio_dest,
-                            headers,
-                            chunks,
-                            queue,
-                            audio_task_id,
-                            pause_event,
-                            on_chunk_done=_on_chunk_done,
-                        )
-                    )
-                    if audio_url
-                    else None
-                )
-
-                results = await asyncio.gather(
-                    *[t for t in (v_task, a_task) if t is not None],
-                    return_exceptions=True,
-                )
-
-            await queue.put(None)
-            await listener
-            refresh_task.cancel()
             try:
-                await refresh_task
-            except asyncio.CancelledError:
-                pass
+                async with make_session() as session:
+                    v_task = (
+                        asyncio.create_task(
+                            download_file(
+                                session,
+                                video_url,
+                                video_dest,
+                                headers,
+                                chunks,
+                                queue,
+                                video_task_id,
+                                pause_event,
+                                on_chunk_done=_on_chunk_done,
+                            )
+                        )
+                        if video_url
+                        else None
+                    )
+                    a_task = (
+                        asyncio.create_task(
+                            download_file(
+                                session,
+                                audio_url,
+                                audio_dest,
+                                headers,
+                                chunks,
+                                queue,
+                                audio_task_id,
+                                pause_event,
+                                on_chunk_done=_on_chunk_done,
+                            )
+                        )
+                        if audio_url
+                        else None
+                    )
+
+                    results = await asyncio.gather(
+                        *[t for t in (v_task, a_task) if t is not None],
+                        return_exceptions=True,
+                    )
+
+                # Happy path: signal listener to stop
+                await queue.put(None)
+                await listener
+
+            finally:
+                # Always cancel both tasks to prevent leaks on exception
+                for task in (listener, refresh_task):
+                    task.cancel()
+                for task in (listener, refresh_task):
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
         # Re-raise the first real exception after Live has closed cleanly
         for r in results:

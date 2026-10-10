@@ -1,12 +1,46 @@
 from __future__ import annotations
 
+# Player clients ordered best-first. YouTube restricts which formats each client
+# may see; the default android/ios pair often yields only 360p, while
+# tv_embedded exposes the full ladder (1080p/720p/...). We try these in order and
+# keep the result with the most usable video formats.
+_PLAYER_CLIENTS = [
+    ["tv_embedded"],
+    ["android", "ios"],
+    ["web_safari"],
+    ["mweb"],
+    ["tv"],
+    ["web"],
+]
+
+
+def _extract_with_clients(url: str, ydl_opts: dict, clients: list[str]) -> dict:
+    import yt_dlp
+
+    opts = dict(ydl_opts)
+    opts["extractor_args"] = {"youtube": {"player_client": list(clients)}}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=False)
+
+
+def _video_format_count(info: dict) -> int:
+    """Number of distinct usable video heights in the extracted info."""
+    heights = {
+        f.get("height")
+        for f in info.get("formats", [])
+        if f.get("height") and f.get("vcodec") not in (None, "none")
+    }
+    return len(heights)
+
 
 def fetch_all_info(url: str) -> dict:
     """
     Extracts all info without downloading, without strict format filtering.
-    """
-    import yt_dlp
 
+    Tries several YouTube player clients and returns the result that exposes the
+    most video resolutions, so the user actually gets a quality choice instead of
+    being silently limited to 360p.
+    """
     ydl_opts = {
         "noplaylist": True,
         "quiet": True,
@@ -15,27 +49,38 @@ def fetch_all_info(url: str) -> dict:
         "writesubtitles": False,
         "writeautomaticsub": False,
         "getcomments": False,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
     }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(url, download=False)
-    except Exception as e:
-        error_msg = str(e).lower()
-        if "bot" in error_msg or "cookie" in error_msg:
-            # Bypass 1: Use alternative player clients (Android, iOS, TV)
-            clients_to_try = ["android", "ios", "tv"]
-            for client in clients_to_try:
-                ydl_opts["extractor_args"] = {"youtube": {"player_client": [client]}}
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        return ydl.extract_info(url, download=False)
-                except Exception:  # noqa: BLE001,S112 - try the next extractor fallback
-                    continue
 
+    best_info = None
+    best_count = -1
+    last_error = None
+
+    for clients in _PLAYER_CLIENTS:
+        try:
+            info = _extract_with_clients(url, ydl_opts, clients)
+        except Exception as e:  # noqa: BLE001 - try the next client set
+            last_error = e
+            continue
+        count = _video_format_count(info)
+        if count > best_count:
+            best_count = count
+            best_info = info
+        # A full ladder (many heights) is good enough — stop early.
+        if best_count >= 3:
+            break
+
+    if best_info is not None:
+        return best_info
+
+    error_msg = str(last_error).lower() if last_error else ""
+    if "bot" in error_msg or "cookie" in error_msg or "sign in" in error_msg:
         raise RuntimeError(
-            "YouTube bot protection blocked the request. Configure authenticated yt-dlp access explicitly if the site requires login."
-        ) from e
+            "YouTube bot protection blocked the request. Configure authenticated "
+            "yt-dlp access explicitly if the site requires login."
+        ) from last_error
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Could not extract video information.")
 
 
 def get_video_resolutions(info: dict) -> list[dict]:
@@ -54,7 +99,7 @@ def get_video_resolutions(info: dict) -> list[dict]:
 
     for fmt in formats:
         # skip audio-only
-        if fmt.get("vcodec") == "none":
+        if fmt.get("vcodec") in (None, "none"):
             continue
 
         height = fmt.get("height")
@@ -81,7 +126,7 @@ def get_video_resolutions(info: dict) -> list[dict]:
                 "resolution": res_str,
                 "display_label": display_label,
                 "format_id": fmt_id,
-                "pre_muxed": fmt.get("acodec") != "none",
+                "pre_muxed": fmt.get("acodec") not in (None, "none"),
             }
         else:
             # Prefer pre-muxed (video+audio in one stream) if found
@@ -122,7 +167,7 @@ def extract_urls(info: dict, video_format_id: str) -> dict:
                 video_url = fmt.get("url")
                 if fmt.get("http_headers"):
                     headers.update(fmt.get("http_headers"))
-                video_has_audio = fmt.get("acodec") != "none"
+                video_has_audio = fmt.get("acodec") not in (None, "none")
                 break
 
     # Find best audio ONLY if the video doesn't already have audio

@@ -2,11 +2,18 @@ import json
 import os
 import re
 import time
+import urllib.error
 import urllib.request
 
 from rich.console import Console
 
 from idm_cli.config import logger
+
+
+def _parse_ver(v):
+    """Parse a version string into a comparable tuple of ints."""
+    parts = re.split(r"[^0-9]+", v)
+    return tuple(int(p) for p in parts if p.isdigit()) or (0,)
 
 
 def check_for_updates():
@@ -52,11 +59,6 @@ def check_for_updates():
         is_newer = parse(latest_version) > parse(__version__)
     except ImportError:
         try:
-
-            def _parse_ver(v):
-                parts = re.split(r"[^0-9]+", v)
-                return tuple(int(p) for p in parts if p.isdigit()) or (0,)
-
             is_newer = _parse_ver(latest_version) > _parse_ver(__version__)
         except (ValueError, TypeError) as e:
             logger.debug(f"Version comparison fallback: {e}")

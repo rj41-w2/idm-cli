@@ -42,8 +42,27 @@ from idm_cli.ui.utils import console, sanitize_filename
 __all__ = ["process_download", "run_download_and_mux"]
 
 
+def _finalize_single_video(video_dest: str, final_dest: str) -> None:
+    """Move a video-only download to its final destination.
+
+    Uses os.replace first (atomic on same filesystem), falls back to
+    shutil.move. Raises RuntimeError with a clean message on failure.
+    """
+    try:
+        os.replace(video_dest, final_dest)
+    except OSError:
+        try:
+            shutil.move(video_dest, final_dest)
+        except OSError as e:
+            raise RuntimeError(f"Could not move downloaded file to {final_dest}: {e}")
+
+
 def _available_path(path: str) -> str:
-    """Choose a non-destructive destination for a new download."""
+    """Choose a non-destructive destination for a new download.
+
+    Treats both files and directories as occupied so the returned path
+    is always a valid, non-existent file target.
+    """
     if not os.path.exists(path):
         return path
     stem, suffix = os.path.splitext(path)
@@ -87,7 +106,7 @@ def run_download_and_mux(
     elif audio_dest and not video_dest:
         convert_to_mp3(audio_dest, final_dest)
     elif video_dest and not audio_dest:
-        shutil.move(video_dest, final_dest)
+        _finalize_single_video(video_dest, final_dest)
 
     return True
 
@@ -117,6 +136,27 @@ def process_download(
                 break
 
     if found_task_id:
+        # Validate that saved temp files still exist before resuming.
+        # If they were deleted, fall back to a fresh download.
+        saved_video = found_task_data.get("video_dest", "")
+        saved_audio = found_task_data.get("audio_dest", "")
+        fmt = found_task_data.get("format_id", "")
+        temp_missing = False
+        if fmt != "direct_file":
+            if saved_video and not os.path.exists(saved_video):
+                temp_missing = True
+            if saved_audio and not os.path.exists(saved_audio):
+                temp_missing = True
+        else:
+            # direct_file: single temp file stored in video_dest
+            if saved_video and not os.path.exists(saved_video):
+                temp_missing = True
+        if temp_missing:
+            # Temp files gone — start fresh
+            found_task_id = None
+            found_task_data = None
+
+    if found_task_id:
         show_resuming()
         task_id = found_task_id
         format_id = found_task_data["format_id"]
@@ -132,9 +172,24 @@ def process_download(
             format_id = "audio_only"
 
     # ── fetch metadata ─────────────────────────────────────────────────────────
+    extractor = None
     with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
         try:
-            extractor = get_extractor(url_to_extract)
+            # Resolve the extractor ONCE and reuse it for extract_urls() below.
+            # Re-probing later can return a different extractor (the probe is a
+            # flaky network call), which breaks extraction/resume.
+            if (
+                found_task_id
+                and found_task_data
+                and found_task_data.get("format_id") == "direct_file"
+            ):
+                # A saved direct_file task must resume with the direct extractor;
+                # never re-probe (the probe may fail and route to yt-dlp).
+                import importlib
+
+                extractor = importlib.import_module("idm_cli.extractors.direct")
+            else:
+                extractor = get_extractor(url_to_extract)
             try:
                 info = extractor.fetch_all_info(url_to_extract)
             except Exception:
@@ -199,7 +254,12 @@ def process_download(
                 f"[bold green]*[/] Fetched info for: [bold white]{escape(title)}[/]"
             )
 
-            selected_res = ask_quality(resolutions, loop_quality, format_id)
+            from idm_cli.config import load_config as _load_config
+
+            default_quality = _load_config().get("default_quality", "720p")
+            selected_res = ask_quality(
+                resolutions, loop_quality, format_id, default_quality
+            )
             if selected_res is None:
                 if not is_interactive:
                     raise typer.Exit(code=1)
@@ -279,7 +339,11 @@ def process_download(
     # ── extract download URLs ──────────────────────────────────────────────────
     with console.status("[bold cyan]Extracting URLs...", spinner="dots"):
         try:
-            extractor = get_extractor(url_to_extract)
+            # Reuse the extractor resolved during the metadata fetch — do NOT
+            # re-probe. A second probe can return a different extractor and break
+            # extraction (this was the resume failure for direct files).
+            if extractor is None:
+                extractor = get_extractor(url_to_extract)
             extracted = extractor.extract_urls(info, format_id)
             video_url = extracted.get("video_url")
             audio_url = extracted.get("audio_url")

@@ -5,11 +5,14 @@ Queue and resume handlers — no direct UI output.
 All console/questionary calls go through ui/prompts.py.
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 
 import psutil
 import typer
+from rich.markup import escape
 
 from idm_cli.config import CONFIG_DIR, logger
 from idm_cli.downloader.core import run_download_and_mux
@@ -32,6 +35,17 @@ LOCK_FILE = os.path.join(CONFIG_DIR, "queue.lock")
 # ── queue lock helpers ─────────────────────────────────────────────────────────
 
 
+def _is_daemon_running_by_pid(pid: int) -> bool:
+    """Check whether *pid* belongs to one of our CLI processes."""
+    if not psutil.pid_exists(pid):
+        return False
+    try:
+        name = psutil.Process(pid).name()
+        return "python" in name.lower() or "idm" in name.lower()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return False
+
+
 def _is_daemon_running() -> bool:
     if not os.path.exists(LOCK_FILE):
         return False
@@ -40,7 +54,15 @@ def _is_daemon_running() -> bool:
             pid = int(f.read().strip())
         if pid == os.getpid():
             return False
-        return psutil.pid_exists(pid)
+        if not psutil.pid_exists(pid):
+            return False
+        # PID exists — verify it is actually our CLI to avoid false
+        # positives from PID reuse by unrelated processes.
+        try:
+            name = psutil.Process(pid).name()
+            return "python" in name.lower() or "idm" in name.lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
     except (OSError, ValueError):
         return False
 
@@ -58,7 +80,7 @@ def _acquire_lock() -> bool:
         try:
             with open(LOCK_FILE, "r") as f:
                 pid = int(f.read().strip())
-            if psutil.pid_exists(pid):
+            if _is_daemon_running_by_pid(pid):
                 return False
         except (OSError, ValueError):
             pass
@@ -114,7 +136,14 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
 
             with console.status("[bold cyan]Fetching metadata...", spinner="dots"):
                 try:
-                    extractor = get_extractor(url_to_extract)
+                    # A queued direct_file must use the direct extractor; never
+                    # re-probe (the probe is flaky and may route to yt-dlp).
+                    if format_id == "direct_file":
+                        import importlib
+
+                        extractor = importlib.import_module("idm_cli.extractors.direct")
+                    else:
+                        extractor = get_extractor(url_to_extract)
                     info = extractor.fetch_all_info(url_to_extract)
                 except Exception as e:  # noqa: BLE001 - queue must continue safely
                     logger.error(f"Error fetching info: {e}")
@@ -189,7 +218,7 @@ def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
 # ── resume handler ─────────────────────────────────────────────────────────────
 
 
-def handle_resume(is_interactive: bool):
+def handle_resume(is_interactive: bool) -> tuple[str, dict] | None:
     """
     Returns (task_id, task_data) tuple if user chose to resume,
     or None if cancelled / deleted / no downloads.
@@ -220,11 +249,13 @@ def handle_resume(is_interactive: bool):
                         os.remove(progress_file)
                     except OSError:
                         pass
-        console.print(f"[bold red]Deleted:[/] {task_data['title']}")
+        console.print(f"[bold red]Deleted:[/] {escape(str(task_data['title']))}")
         if not is_interactive:
             raise typer.Exit(code=0)
         return None
 
     # action == "resume"
-    console.print(f"[bold yellow]Resuming download for:[/] {task_data['title']}\n")
+    console.print(
+        f"[bold yellow]Resuming download for:[/] {escape(str(task_data['title']))}\n"
+    )
     return tid, task_data

@@ -153,6 +153,27 @@ async def download_ffmpeg() -> str:
     return ffmpeg_path
 
 
+def _ffmpeg_failure_message(action: str, stderr: bytes) -> str:
+    """Turn raw ffmpeg stderr into a short, user-friendly message."""
+    text = stderr.decode("utf-8", errors="replace") if stderr else ""
+    # ffmpeg prints a long banner + stream dump; keep only the last real error
+    # line(s), which is what actually explains the failure.
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    interesting = [
+        ln
+        for ln in lines
+        if ln.lower().startswith(("error", "[error"))
+        or "invalid argument" in ln.lower()
+        or "unable to" in ln.lower()
+        or "no such file" in ln.lower()
+        or "permission denied" in ln.lower()
+    ]
+    detail = (
+        interesting[-1] if interesting else (lines[-1] if lines else "unknown error")
+    )
+    return f"{action} failed: {detail}"
+
+
 def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
     """
     Muxes a video and audio file together into a single output file using ffmpeg.
@@ -174,7 +195,10 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
         raise RuntimeError("FFmpeg is not installed! Cannot mux files.")
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    work_output = f"{output_path}.part"
+    # ffmpeg infers the container from the file extension, so a ".mp4.part"
+    # suffix breaks it ("Unable to choose an output format"). Write to a
+    # temporary file that KEEPS the real extension, then rename atomically.
+    work_output = f"{output_path}.part{os.path.splitext(output_path)[1]}"
     try:
         os.remove(work_output)
     except FileNotFoundError:
@@ -205,10 +229,16 @@ def mux_audio_video(video_path: str, audio_path: str, output_path: str) -> None:
             logger.warning(f"Failed to delete original files: {e}")
 
     except subprocess.CalledProcessError as e:
+        # Keep the full stderr in the log file only — never dump it to the user.
         logger.error(
-            f"FFmpeg muxing failed: {e.stderr.decode('utf-8', errors='replace')}"
+            f"FFmpeg muxing failed (exit {e.returncode}): "
+            f"{e.stderr.decode('utf-8', errors='replace')}"
         )
-        raise RuntimeError(f"FFmpeg muxing failed: {e}")
+        try:
+            os.remove(work_output)
+        except OSError:
+            pass
+        raise RuntimeError(_ffmpeg_failure_message("Muxing", e.stderr)) from None
     except FileNotFoundError:
         raise RuntimeError(f"FFmpeg is not installed! {_ffmpeg_install_hint()}")
 
@@ -226,7 +256,8 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
         raise RuntimeError("FFmpeg is not installed! Cannot convert audio.")
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    work_output = f"{output_path}.part"
+    # Keep the real extension so ffmpeg can infer the mp3 muxer, then rename.
+    work_output = f"{output_path}.part{os.path.splitext(output_path)[1]}"
     try:
         os.remove(work_output)
     except FileNotFoundError:
@@ -246,9 +277,15 @@ def convert_to_mp3(audio_path: str, output_path: str) -> None:
             logger.warning(f"Failed to delete original file: {e}")
 
     except subprocess.CalledProcessError as e:
+        # Full stderr goes to the log file only — show the user a short message.
         logger.error(
-            f"FFmpeg conversion failed: {e.stderr.decode('utf-8', errors='replace')}"
+            f"FFmpeg conversion failed (exit {e.returncode}): "
+            f"{e.stderr.decode('utf-8', errors='replace')}"
         )
-        raise RuntimeError(f"FFmpeg conversion failed: {e}")
+        try:
+            os.remove(work_output)
+        except OSError:
+            pass
+        raise RuntimeError(_ffmpeg_failure_message("Conversion", e.stderr)) from None
     except FileNotFoundError:
         raise RuntimeError(f"FFmpeg is not installed! {_ffmpeg_install_hint()}")

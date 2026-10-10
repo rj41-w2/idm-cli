@@ -85,26 +85,61 @@ def show_success(media_type: str, final_dest: str) -> None:
 
 
 def show_error(msg: str, label: str = "Error") -> None:
-    console.print(f"[bold red]{escape(label)}:[/] {escape(msg)}")
+    # Collapse to a single line and cap the length so a raw multi-line dump
+    # (e.g. a stray ffmpeg traceback) can never flood the console.
+    text = " ".join(str(msg).split())
+    if len(text) > 300:
+        text = text[:297] + "..."
+    console.print(f"[bold red]{escape(label)}:[/] {escape(text)}")
 
 
 # ── interactive prompts ────────────────────────────────────────────────────────
 
 
 def ask_quality(
-    resolutions: list[dict], loop_quality: str, format_id: str
+    resolutions: list[dict],
+    loop_quality: str | None,
+    format_id: str,
+    default_quality: str = "",
 ) -> str | None:
     """
     Return the selected resolution string, or None if user cancelled.
-    If loop_quality is set or only one resolution exists, auto-selects.
+
+    Prompts only when a real terminal is available and more than one
+    resolution exists. When stdin is not a TTY (pipes, cron, CI) or only one
+    resolution exists, auto-selects: loop_quality if given, else default_quality
+    if it matches, else the first (highest) resolution.
     """
-    if loop_quality or len(resolutions) == 1:
+    import sys
+
+    # Non-interactive (piped/cron/CI): never prompt — questionary would raise
+    # EOFError on a non-tty stdin.
+    if not sys.stdin.isatty() or loop_quality or len(resolutions) == 1:
         matched = next(
             (r for r in resolutions if r["resolution"] == loop_quality), None
         )
-        return matched["resolution"] if matched else resolutions[0]["resolution"]
+        if matched:
+            return matched["resolution"]
+        if default_quality:
+            default_matched = next(
+                (r for r in resolutions if r["resolution"] == default_quality), None
+            )
+            if default_matched:
+                return default_matched["resolution"]
+        return resolutions[0]["resolution"]
 
-    choices = [r.get("display_label", r["resolution"]) for r in resolutions]
+    # Interactive: put the configured default first and mark it.
+    ordered = list(resolutions)
+    if default_quality:
+        ordered.sort(key=lambda r: r["resolution"] != default_quality)
+
+    choices = []
+    for r in ordered:
+        label = r.get("display_label", r["resolution"])
+        if default_quality and r["resolution"] == default_quality:
+            label = f"{label}  (default)"
+        choices.append(label)
+
     prompt_text = (
         "Choose download option:"
         if format_id == "direct_file"
@@ -118,10 +153,12 @@ def ask_quality(
         console.print("[bold red]Cancelled by user[/bold red]")
         return None
 
+    selected_display = selected_display.replace("  (default)", "")
     return next(
         r["resolution"]
-        for r in resolutions
+        for r in ordered
         if r.get("display_label", r["resolution"]) == selected_display
+        or r["resolution"] == selected_display
     )
 
 
