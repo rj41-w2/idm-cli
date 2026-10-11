@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "idm-cli"
-version = "1.3.4"
+# Version lives in idm_cli/__init__.py (__version__) and is read from there at
+# build time, so it can never drift between the package and the metadata.
+dynamic = ["version"]
 description = "A lightning-fast, universal command-line download manager"
 readme = "README.md"
 # Table form (not the PEP 639 SPDX string) on purpose: the SPDX string needs
@@ -44,9 +46,18 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/rj41-w2/idm-cli"
+Repository = "https://github.com/rj41-w2/idm-cli"
+Issues = "https://github.com/rj41-w2/idm-cli/issues"
+Changelog = "https://github.com/rj41-w2/idm-cli/blob/main/CHANGELOG.md"
 
 [project.scripts]
 idm = "idm_cli.ui.cli:app"
+
+[tool.setuptools.dynamic]
+version = { attr = "idm_cli.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["idm_cli*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

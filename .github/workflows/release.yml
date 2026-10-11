@@ -1,0 +1,81 @@
+name: Release
+
+# Publishes to PyPI when a version tag is pushed, e.g.
+#   git tag v1.3.5 && git push origin v1.3.5
+#
+# Triggering on tags (not on every push to main) is deliberate: PyPI rejects a
+# version that already exists, so a push-triggered workflow would fail on every
+# commit until the version is bumped.
+#
+# Authentication uses PyPI Trusted Publishing (OIDC) — no API token is stored
+# in the repo. It requires a publisher on PyPI bound to:
+#   owner: rj41-w2   repo: idm-cli   workflow: release.yml   environment: pypi
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Check the tag matches the packaged version
+        # A tag of v1.3.5 must ship a 1.3.5 wheel. Without this, a forgotten
+        # version bump would publish the old version under a new tag and PyPI
+        # would reject it with a confusing error.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          built=$(python -c "import pathlib,re; \
+            print(re.search(r'idm_cli-([^-]+)-py3', \
+            [p.name for p in pathlib.Path('dist').glob('*.whl')][0]).group(1))")
+          echo "tag=$tag built=$built"
+          if [ "$tag" != "$built" ]; then
+            echo "::error::tag v$tag does not match packaged version $built — bump idm_cli/__init__.py"
+            exit 1
+          fi
+
+      - name: Validate metadata
+        run: |
+          python -m pip install --upgrade twine
+          twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # Must match the environment configured in the PyPI trusted publisher.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/idm-cli/
+    permissions:
+      id-token: write # required for OIDC trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

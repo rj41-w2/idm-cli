@@ -14,6 +14,15 @@ All notable changes to IDM-CLI are documented here.
 - **UI palette reduced to two colours (cyan + white).** Status meaning is now
   carried by a leading glyph instead of colour: `✓` success, `✗` error/cancel,
   `•` neutral info, `»` an action starting, `‖` paused.
+- **Version is now single-sourced.** `pyproject.toml` reads `__version__` from
+  `idm_cli/__init__.py` instead of repeating it, so the package and the
+  metadata can no longer disagree.
+
+### Added
+
+- **Automated releases.** Pushing a `v*` tag runs `.github/workflows/release.yml`,
+  which builds, validates, and publishes to PyPI via Trusted Publishing (OIDC).
+  The workflow refuses to publish when the tag and the packaged version differ.
 
 ## [1.3.4] - 2026-10-11
 

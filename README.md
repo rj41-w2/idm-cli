@@ -2,9 +2,7 @@
 
 <h1>IDM-CLI</h1>
 
-**A lightning-fast, cross-platform command-line download manager written in Python.**
-
-*The official IDM asks you to pay after 30 days — IDM-CLI is 100% free, open-source, and yours to modify!*
+**A lightning-fast, universal command-line download manager written in Python.**
 
 [![PyPI version](https://img.shields.io/pypi/v/idm-cli?color=blue&label=pypi%20version)](https://pypi.org/project/idm-cli/)
 [![Downloads](https://static.pepy.tech/badge/idm-cli)](https://pepy.tech/project/idm-cli)
@@ -76,9 +74,8 @@ pip install idm-cli
 
 # From source
 git clone https://github.com/rj41-w2/idm-cli.git
-cd IDM-CLI
-pip install -r requirements.txt
-pip install -e .
+cd idm-cli
+pip install -e ".[dev]"
 ```
 
 ## Usage
@@ -140,7 +137,7 @@ python -m idm_cli
 
 ```
 idm_cli/
-├── __init__.py              # Package version (currently 1.3.3)
+├── __init__.py              # Package version
 ├── __main__.py              # python -m idm_cli entry point
 ├── config.py                # Platform-aware config, logging, and paths
 ├── update_checker.py        # PyPI version check
@@ -155,17 +152,16 @@ idm_cli/
 │   ├── handlers.py          # Queue & resume handlers
 │   ├── muxer.py             # FFmpeg verification, muxing, and conversion
 │   └── state.py             # Locked, atomic JSON state persistence
-├── extractors/
-│   ├── __init__.py           # Direct HTTP probe and extractor selection
-│   ├── ytdlp.py             # YouTube/social media extractor
-│   ├── direct.py             # Direct HTTP file metadata and URL extraction
-│   └── winget.py             # Windows Package Manager metadata extraction
-└── tests/
-    ├── test_core.py          # State, config, extractor, and utility tests
-    └── test_regressions.py   # Downloader and URL validation regression tests
+└── extractors/
+    ├── __init__.py          # Direct HTTP probe and extractor selection
+    ├── ytdlp.py             # YouTube/social media extractor
+    ├── direct.py            # Direct HTTP file metadata and URL extraction
+    └── winget.py            # Windows Package Manager metadata extraction
+
+tests/                       # pytest suite (runs fully offline)
 ```
 
-The download flow is: `cli.py` selects the extractor, `core.py` prepares the
+The download flow is: `core.py` selects the extractor and prepares the
 destination and media pipeline, `downloader.py` downloads validated byte ranges,
 `progress.py` renders live progress, and `muxer.py` creates the final media file.
 Interrupted downloads are tracked under the platform-specific application data
