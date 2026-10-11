@@ -89,6 +89,8 @@ async def run_with_progress(
     audio_dest: str,
     pause_event: asyncio.Event,
     warning_state: dict,
+    video_label: str = "Video",
+    audio_label: str = "Audio",
 ) -> None:
     """
     Run parallel downloads with a full Rich Live progress display.
@@ -123,7 +125,7 @@ async def run_with_progress(
         # ── progress bars ──────────────────────────────────────────────────────
         progress = Progress(
             SpinnerColumn("dots12"),
-            TextColumn("[bold cyan]{task.description:<8}", justify="left"),
+            TextColumn("[bold cyan]{task.description:<10}", justify="left"),
             BarColumn(
                 bar_width=38,
                 complete_style="cyan",
@@ -138,8 +140,12 @@ async def run_with_progress(
             expand=False,
         )
 
-        video_task_id = progress.add_task("Video", total=None) if video_url else None
-        audio_task_id = progress.add_task("Audio", total=None) if audio_url else None
+        video_task_id = (
+            progress.add_task(video_label, total=None) if video_url else None
+        )
+        audio_task_id = (
+            progress.add_task(audio_label, total=None) if audio_url else None
+        )
 
         # ── live display builder ───────────────────────────────────────────────
         def _build_display() -> Group:

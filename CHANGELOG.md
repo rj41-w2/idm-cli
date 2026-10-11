@@ -8,6 +8,12 @@ All notable changes to IDM-CLI are documented here.
 
 - README "Security" section documenting what IDM-CLI does and does not protect
   against (it is a download manager, not an antivirus).
+- **Automated releases.** Pushing a `v*` tag runs `.github/workflows/release.yml`,
+  which builds, validates, and publishes to PyPI via Trusted Publishing (OIDC).
+  The workflow refuses to publish when the tag and the packaged version differ.
+- A terminal demo GIF in the README, recorded from real runs.
+- **PyPI discoverability:** `keywords` and a full classifier set, so the package
+  matches searches for "idm", "idm cli", and "internet download manager".
 
 ### Changed
 
@@ -18,11 +24,11 @@ All notable changes to IDM-CLI are documented here.
   `idm_cli/__init__.py` instead of repeating it, so the package and the
   metadata can no longer disagree.
 
-### Added
+### Fixed
 
-- **Automated releases.** Pushing a `v*` tag runs `.github/workflows/release.yml`,
-  which builds, validates, and publishes to PyPI via Trusted Publishing (OIDC).
-  The workflow refuses to publish when the tag and the packaged version differ.
+- **Progress bar no longer mislabels direct files.** A PDF or archive downloaded
+  through the single-stream path showed a bar reading "Video"; it now shows the
+  real media type ("PDF File").
 
 ## [1.3.4] - 2026-10-11
 

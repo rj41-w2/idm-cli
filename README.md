@@ -28,6 +28,8 @@ alternative with a friendlier interactive UI and built-in media extraction.
 
 > Install: `pip install idm-cli` · Run: `idm "<url>"`
 
+![IDM-CLI demo: downloading a 10 MB file with 8 parallel chunks, then a PDF, showing live progress and the saved path](docs/demo.gif)
+
 ## Features
 
 - **Parallel Chunk Engine** — Splits downloads into multiple concurrent chunks using `curl-cffi` async sessions to fully saturate your bandwidth.

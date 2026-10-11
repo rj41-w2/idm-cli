@@ -98,6 +98,11 @@ def run_download_and_mux(
             audio_dest=audio_dest,
             pause_event=pause_event,
             warning_state=warning_state,
+            # A direct file downloads through the single-stream path, so calling
+            # its bar "Video" was wrong (a PDF showed up as "Video"). Pass the
+            # real label through.
+            video_label=media_type if not audio_url else "Video",
+            audio_label="Audio",
         )
     )
 

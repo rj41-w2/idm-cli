@@ -54,6 +54,32 @@ async def _test_updates():
     await asyncio.wait_for(queue.join(), timeout=1)
 
 
+# ── progress bar label (regression: direct files were labelled "Video") ───────
+
+
+def test_run_with_progress_labels_are_parameters():
+    """run_with_progress must accept the bar labels instead of hardcoding them.
+
+    A direct file (e.g. a PDF) goes through the single-stream path, so its bar
+    used to read "Video". The labels are now parameters defaulting to Video/Audio.
+    """
+    import inspect
+
+    from idm_cli.ui.progress import run_with_progress
+
+    params = inspect.signature(run_with_progress).parameters
+    assert params["video_label"].default == "Video"
+    assert params["audio_label"].default == "Audio"
+
+
+def test_core_passes_media_type_as_video_label():
+    """core.py must pass the real media_type for a direct file, not "Video"."""
+    import pathlib
+
+    src = pathlib.Path("idm_cli/downloader/core.py").read_text(encoding="utf-8")
+    assert 'video_label=media_type if not audio_url else "Video"' in src
+
+
 # ── update_checker version-comparison fallback ────────────────────────────────
 
 
