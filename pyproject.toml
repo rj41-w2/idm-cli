@@ -7,8 +7,35 @@ name = "idm-cli"
 # Version lives in idm_cli/__init__.py (__version__) and is read from there at
 # build time, so it can never drift between the package and the metadata.
 dynamic = ["version"]
-description = "A lightning-fast, universal command-line download manager"
+description = "Internet Download Manager for the terminal: parallel-chunk downloads, auto-resume, and video/audio extraction"
 readme = "README.md"
+# These keywords are what PyPI's search index and the classifiers below key off.
+# They are the discoverability surface: "idm", "idm cli", "internet download
+# manager", and the download-manager/downloader synonyms people actually type.
+keywords = [
+    "idm",
+    "idm-cli",
+    "idm cli",
+    "internet download manager",
+    "download manager",
+    "downloader",
+    "cli downloader",
+    "terminal downloader",
+    "command line download manager",
+    "parallel download",
+    "accelerated download",
+    "multi-threaded download",
+    "resume download",
+    "video downloader",
+    "youtube downloader",
+    "audio downloader",
+    "mp3 downloader",
+    "yt-dlp",
+    "aria2 alternative",
+    "wget alternative",
+    "curl downloader",
+    "python downloader",
+]
 # Table form (not the PEP 639 SPDX string) on purpose: the SPDX string needs
 # setuptools >= 77, but setuptools dropped Python 3.8 support at 75.3, so the
 # 3.8 CI jobs could never install the package. The table form works on
@@ -19,9 +46,29 @@ authors = [
     { name = "Rehan" },
 ]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet",
+    "Topic :: Internet :: File Transfer Protocol (FTP)",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Video",
+    "Topic :: System :: Networking",
+    "Topic :: Terminals",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "typer",

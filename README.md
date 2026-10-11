@@ -14,7 +14,19 @@
 
 </div>
 
-IDM-CLI splits files into multiple parallel chunks (default 8, up to 32) to maximize your internet speed. It supports downloading from **YouTube**, **Facebook**, **Instagram**, and any **Direct File URL** (`.exe`, `.zip`, `.pdf`, etc.).
+**IDM-CLI** (short for *Internet Download Manager CLI*) is a free, open-source
+download manager for the terminal — an `idm` command you run from your shell.
+It splits files into multiple parallel chunks (default 8, up to 32) to saturate
+your bandwidth, resumes interrupted downloads from the exact byte it stopped at,
+and downloads video and audio from **YouTube**, **Facebook**, **Instagram**, and
+any **direct file URL** (`.exe`, `.zip`, `.pdf`, `.iso`, `.mp4`, …).
+
+If you are looking for a command-line Internet Download Manager — an IDM-style
+accelerated downloader for Linux, macOS, or Windows that lives in the terminal
+instead of the desktop — this is it. Think of it as an `aria2` or `wget`
+alternative with a friendlier interactive UI and built-in media extraction.
+
+> Install: `pip install idm-cli` · Run: `idm "<url>"`
 
 ## Features
 
