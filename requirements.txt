@@ -1,9 +1,0 @@
-typer
-rich
-curl-cffi>=0.7.0
-aiofiles
-yt-dlp
-pyfiglet
-questionary
-psutil
-platformdirs
