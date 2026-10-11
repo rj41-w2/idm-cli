@@ -67,13 +67,13 @@ def check_for_updates():
     if is_newer:
         console = Console()
         console.print(
-            f"\n[bold yellow]A new version of IDM-CLI ({latest_version}) is available![/bold yellow]"
+            f"\n[bold cyan]•[/] A new version of IDM-CLI ({latest_version}) is available!"
         )
 
         console.print(
-            "\n[bold cyan]Please close this app and run the following command in your terminal to update:[/bold cyan]"
+            "\n[bold cyan]•[/] Please close this app and run the following command in your terminal to update:"
         )
-        console.print("  [bold green]pip install --upgrade idm-cli[/bold green]\n")
+        console.print("  [bold cyan]pip install --upgrade idm-cli[/bold cyan]\n")
 
     # Finally, write the current time.time() to last_check.json
     try:

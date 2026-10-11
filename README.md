@@ -29,6 +29,37 @@ IDM-CLI splits files into multiple parallel chunks (default 8, up to 32) to maxi
 - **Cross-Platform** — Works on Windows, macOS, and Linux with platform-specific FFmpeg handling.
 - **Auto-Update Check** — Checks PyPI once a day and notifies you when a new version is available.
 
+## Security
+
+**IDM-CLI is a download manager, not an antivirus.** It does not scan files for
+malware — no signature database, no heuristic engine. Downloading a file that
+contains malware will not trigger any warning from IDM-CLI itself.
+
+What IDM-CLI does give you:
+
+- **SSRF protection** — URLs pointing at private/loopback/link-local hosts
+  (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, …) are
+  rejected, so a crafted link cannot make IDM-CLI probe your internal network.
+- **No shell execution** — all `subprocess` calls use `shell=False` with
+  argument lists; no URL or title ever reaches a shell.
+- **Verified FFmpeg download** — when IDM-CLI auto-installs FFmpeg, the archive
+  is checked against the SHA-256 digest published by GitHub Releases.
+
+**How to stay safe:** rely on your operating system's antivirus, which scans
+files as they land on disk.
+
+- **Windows:** Windows Defender real-time protection scans WSL paths
+  (`\\wsl.localhost\...`) automatically — nothing to configure.
+- **Linux:** install ClamAV (`sudo apt install clamav`), keep the signature
+  database current (`sudo freshclam`), and scan a download with
+  `clamscan ~/Downloads/file`. Add a cron job or an inotify watcher to scan
+  automatically.
+
+This mirrors how the official Internet Download Manager behaves: IDM does not
+detect malware either — it can be configured (Options → Downloads → Virus
+checking) to call an installed antivirus after a download finishes, and
+otherwise relies on the antivirus's real-time protection.
+
 ## Prerequisites
 
 - **Python 3.8+**

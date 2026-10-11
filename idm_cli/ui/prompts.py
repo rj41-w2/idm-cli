@@ -48,39 +48,44 @@ __all__ = [
 
 
 # ── status messages ────────────────────────────────────────────────────────────
+#
+# Only two colours are used across the whole UI: cyan (accent) and white (text).
+# Meaning is carried by the leading glyph instead of by colour:
+#   ✓  success        ✗  error/failure
+#   •  neutral info   »  an action about to happen
 
 
 def show_initializing(url: str) -> None:
-    console.print(f"[bold yellow]Initializing download for:[/] {escape(url)}\n")
+    console.print(f"[bold cyan]»[/] Initializing download for: {escape(url)}\n")
 
 
 def show_resuming() -> None:
-    console.print("[bold yellow]Found in resume list! Auto-resuming...[/]")
+    console.print("[bold cyan]»[/] Found in resume list! Auto-resuming...")
 
 
 def show_queued(media_type: str = "") -> None:
-    console.print("[bold green]Added to queue![/]")
+    console.print("[bold cyan]✓[/] Added to queue!")
 
 
 def show_download_start(chunks: int) -> None:
-    console.print(f"[bold green]*[/] Using {chunks} chunks per file.")
+    console.print(f"[bold cyan]•[/] Using {chunks} chunks per file.")
     console.print(
-        "[bold cyan]Starting parallel downloads...[/]"
+        "[bold cyan]»[/] Starting parallel downloads..."
         " [dim](Press 'p' to pause, 'r' to resume)[/dim]\n"
     )
 
 
 def show_download_cancelled() -> None:
     console.print(
-        "\n[bold red]Download cancelled by user. "
-        "Progress saved to resume later.[/bold red]"
+        "\n[bold cyan]✗[/] Download cancelled by user. Progress saved to resume later."
     )
 
 
 def show_success(media_type: str, final_dest: str) -> None:
-    console.print("\n[bold green]✓[/] Downloads completed.")
+    console.print("\n[bold cyan]✓[/] Downloads completed.")
     console.print(
-        f"\n[bold green] Success! {escape(media_type)} saved as:[/] [bold white]{escape(final_dest)}[/]"
+        f"[bold cyan]✓[/] Success! {escape(media_type)} saved as: "
+        f"[bold white]{escape(final_dest)}[/]"
     )
 
 
@@ -90,7 +95,7 @@ def show_error(msg: str, label: str = "Error") -> None:
     text = " ".join(str(msg).split())
     if len(text) > 300:
         text = text[:297] + "..."
-    console.print(f"[bold red]{escape(label)}:[/] {escape(text)}")
+    console.print(f"[bold cyan]✗[/] [bold cyan]{escape(label)}:[/] {escape(text)}")
 
 
 # ── interactive prompts ────────────────────────────────────────────────────────
@@ -150,7 +155,7 @@ def ask_quality(
     ).ask(kbi_msg="")
 
     if not selected_display:
-        console.print("[bold red]Cancelled by user[/bold red]")
+        console.print("[bold cyan]✗[/] Cancelled by user")
         return None
 
     selected_display = selected_display.replace("  (default)", "")
@@ -171,7 +176,7 @@ def ask_ffmpeg_install(is_interactive: bool) -> str:
         return "auto"
 
     console.print(
-        "[bold yellow]High quality video/audio processing requires FFmpeg.[/]"
+        "[bold cyan]•[/] High quality video/audio processing requires FFmpeg."
     )
 
     _sys = platform.system()
@@ -234,9 +239,9 @@ def install_ffmpeg(method: str, is_interactive: bool) -> bool:
                     shell=False,
                     timeout=120,
                 )
-            console.print("[bold green]FFmpeg installed successfully via winget![/]")
+            console.print("[bold cyan]✓[/] FFmpeg installed successfully via winget!")
             console.print(
-                "[bold yellow]Please restart your terminal/command prompt "
+                "[bold cyan]•[/] Please restart your terminal/command prompt "
                 "to apply the PATH changes and run your command again.[/]"
             )
             raise typer.Exit(code=0)
@@ -257,7 +262,7 @@ def install_ffmpeg(method: str, is_interactive: bool) -> bool:
                     shell=False,
                     timeout=120,
                 )
-            console.print("[bold green]FFmpeg installed successfully via brew![/]")
+            console.print("[bold cyan]✓[/] FFmpeg installed successfully via brew!")
             raise typer.Exit(code=0)
         except typer.Exit:
             raise
@@ -276,7 +281,7 @@ def install_ffmpeg(method: str, is_interactive: bool) -> bool:
                     shell=False,
                     timeout=120,
                 )
-            console.print("[bold green]FFmpeg installed successfully via apt![/]")
+            console.print("[bold cyan]✓[/] FFmpeg installed successfully via apt!")
             raise typer.Exit(code=0)
         except typer.Exit:
             raise
@@ -286,18 +291,18 @@ def install_ffmpeg(method: str, is_interactive: bool) -> bool:
 
     # 'cancel'
     console.print(
-        "[bold red]Cannot continue without FFmpeg. "
+        "[bold cyan]✗[/] Cannot continue without FFmpeg. "
         "Please select a lower quality (like 360p)[/]"
     )
     return False
 
 
 def show_queue_empty() -> None:
-    console.print("[bold green]No videos in queue![/]")
+    console.print("[bold cyan]•[/] No videos in queue!")
 
 
 def show_queue_item_start(title: str) -> None:
-    console.print(f"[bold yellow]Starting queued download:[/] {escape(title)}\n")
+    console.print(f"[bold cyan]»[/] Starting queued download: {escape(title)}\n")
 
 
 def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
@@ -306,7 +311,7 @@ def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
     Returns (action, task_id) where action is 'resume' or 'delete', or None if cancelled.
     """
     if not incomplete:
-        console.print("[bold green]No incomplete downloads found![/]")
+        console.print("[bold cyan]•[/] No incomplete downloads found!")
         return None
 
     choices = []
@@ -321,12 +326,12 @@ def ask_resume_action(incomplete: dict) -> tuple[str, str] | None:
     ).ask(kbi_msg="")
 
     if not result:
-        console.print("[bold red]Cancelled by user[/bold red]")
+        console.print("[bold cyan]✗[/] Cancelled by user")
         return None
 
     action, tid = result
     if action == "back":
-        console.print("[bold cyan]Returning to main menu...[/bold cyan]")
+        console.print("[bold cyan]»[/] Returning to main menu...")
         return None
 
     return action, tid

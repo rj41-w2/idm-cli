@@ -2,6 +2,19 @@
 
 All notable changes to IDM-CLI are documented here.
 
+## [Unreleased]
+
+### Added
+
+- README "Security" section documenting what IDM-CLI does and does not protect
+  against (it is a download manager, not an antivirus).
+
+### Changed
+
+- **UI palette reduced to two colours (cyan + white).** Status meaning is now
+  carried by a leading glyph instead of colour: `✓` success, `✗` error/cancel,
+  `•` neutral info, `»` an action starting, `‖` paused.
+
 ## [1.3.4] - 2026-10-11
 
 ### Fixed

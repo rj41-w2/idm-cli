@@ -249,13 +249,13 @@ def handle_resume(is_interactive: bool) -> tuple[str, dict] | None:
                         os.remove(progress_file)
                     except OSError:
                         pass
-        console.print(f"[bold red]Deleted:[/] {escape(str(task_data['title']))}")
+        console.print(f"[bold cyan]✗[/] Deleted: {escape(str(task_data['title']))}")
         if not is_interactive:
             raise typer.Exit(code=0)
         return None
 
     # action == "resume"
     console.print(
-        f"[bold yellow]Resuming download for:[/] {escape(str(task_data['title']))}\n"
+        f"[bold cyan]»[/] Resuming download for: {escape(str(task_data['title']))}\n"
     )
     return tid, task_data

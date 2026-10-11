@@ -146,6 +146,14 @@ console = Console()
 
 
 CHANGELOG = {
+    "1.3.4": [
+        "Fixed downloads failing with HTTP 403 on servers that reject the impersonated browser User-Agent.",
+        "Fixed resume for direct files: the extractor is resolved once instead of twice.",
+        "Fixed FFmpeg muxing failing with exit 234 (temporary output file kept a .part extension).",
+        "Fixed the quality menu never appearing: more YouTube player clients are tried now.",
+        "Fixed a crash on piped/non-TTY input, and shortened FFmpeg error messages.",
+        "Two-colour UI (cyan + white) with glyphs instead of colour for status.",
+    ],
     "1.3.3": [
         "Hardened range downloads and resume validation to prevent corrupted files.",
         "Improved state locking, safe filenames, atomic media output, and FFmpeg verification.",
@@ -174,11 +182,9 @@ def check_first_run() -> None:
 
     if __version__ != last_version:
         if __version__ in CHANGELOG:
-            console.print(
-                f"\n[bold cyan]*** What's New in v{__version__} ***[/bold cyan]"
-            )
+            console.print(f"\n[bold cyan]• What's New in v{__version__}[/]")
             for change in CHANGELOG[__version__]:
-                console.print(f"  [bold cyan]*[/bold cyan] {change}")
+                console.print(f"  [bold cyan]•[/] {change}")
             console.print()
 
         config["last_version"] = __version__
@@ -189,12 +195,13 @@ def check_first_run() -> None:
 
 custom_style = questionary.Style(
     [
+        # Two colours only: cyan (accent) and white (text).
         ("qmark", "fg:cyan bold"),
         ("question", "bold white"),
         ("answer", "fg:cyan bold"),
         ("pointer", "fg:cyan bold"),
         ("highlighted", "fg:cyan bold"),
-        ("flags", "fg:darkgray"),
+        ("flags", "fg:white"),
     ]
 )
 

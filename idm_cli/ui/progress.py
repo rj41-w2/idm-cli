@@ -52,15 +52,13 @@ async def progress_listener(
                         if "Paused" not in task.description:
                             progress.update(
                                 task.id,
-                                description=f"[bold yellow]Paused[/] {task.description}",
+                                description=f"[bold cyan]‖[/] {task.description}",
                             )
                 elif key == "r" and not pause_event.is_set():
                     pause_event.set()
                     for task in progress.tasks:
                         if "Paused" in task.description:
-                            new_desc = task.description.replace(
-                                "[bold yellow]Paused[/] ", ""
-                            )
+                            new_desc = task.description.replace("[bold cyan]‖[/] ", "")
                             progress.update(task.id, description=new_desc)
 
         try:
@@ -129,7 +127,7 @@ async def run_with_progress(
             BarColumn(
                 bar_width=38,
                 complete_style="cyan",
-                finished_style="bold green",
+                finished_style="bold cyan",
                 pulse_style="bold white",
             ),
             TextColumn("[progress.percentage]{task.percentage:>5.1f}%"),
@@ -154,14 +152,14 @@ async def run_with_progress(
                 chunk_ids = ", ".join(sorted(retry_state["chunks"].keys(), key=int))
                 rows.append(
                     Text.from_markup(
-                        f" [bold yellow]⚠ chunk {chunk_ids} retry {max_retry}/{max_of}[/]"
+                        f" [bold cyan]⚠ chunk {chunk_ids} retry {max_retry}/{max_of}[/]"
                     )
                 )
 
             if warning_state.get("show"):
                 rows.append(
                     Text.from_markup(
-                        "[bold yellow]⚠  Press Ctrl+C again within 5 s to cancel[/]"
+                        "[bold cyan]⚠  Press Ctrl+C again within 5 s to cancel[/]"
                     )
                 )
 

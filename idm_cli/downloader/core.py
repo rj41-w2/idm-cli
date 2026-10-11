@@ -207,7 +207,7 @@ def process_download(
 
             if info.get("_type") == "playlist":
                 console.print(
-                    "\n[bold yellow]Currently, the feature to download "
+                    "\n[bold cyan]•[/] Currently, the feature to download "
                     "album/playlist photos or videos is not added.[/]"
                 )
                 if not is_interactive:
@@ -251,7 +251,7 @@ def process_download(
             from rich.markup import escape
 
             console.print(
-                f"[bold green]*[/] Fetched info for: [bold white]{escape(title)}[/]"
+                f"[bold cyan]•[/] Fetched info for: [bold white]{escape(title)}[/]"
             )
 
             from idm_cli.config import load_config as _load_config

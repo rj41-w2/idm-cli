@@ -72,7 +72,7 @@ def download(
         logger.debug("Update check failed", exc_info=True)
 
     if url and not url.strip().lower().startswith("winget ") and not is_valid_url(url):
-        console.print(f"[bold red]Invalid or unsafe URL:[/] {escape(url.strip())}")
+        console.print(f"[bold cyan]✗[/] Invalid or unsafe URL: {escape(url.strip())}")
         console.print("[dim white]Only HTTP/HTTPS URLs are allowed.[/dim white]")
         raise typer.Exit(code=1)
 
@@ -101,7 +101,7 @@ def download(
 
             if current_url is None:
                 if time.time() - last_ctrl_c_time <= 5:
-                    console.print("[bold red]Cancelled by user[/bold red]")
+                    console.print("[bold cyan]✗[/] Cancelled by user")
                     raise typer.Exit()
                 last_ctrl_c_time = time.time()
                 show_warning = True
@@ -164,7 +164,7 @@ def download(
             is_flag_only = lower.startswith("-")
             if not is_url and not is_known_cmd and not is_winget and not is_flag_only:
                 console.print(
-                    f"[bold red]Unknown command:[/] {escape(current_url.strip())}"
+                    f"[bold cyan]✗[/] Unknown command: {escape(current_url.strip())}"
                 )
                 console.print(
                     "[dim white]Type 'help' to see available commands.[/dim white]\n"
@@ -235,7 +235,7 @@ def download(
             continue
 
         if current_url.strip().lower() == "exit":
-            console.print("[bold green]Goodbye![/bold green]")
+            console.print("[bold cyan]»[/] Goodbye!")
             raise typer.Exit()
 
         if current_url.strip().lower() in ["start queue", "queue start"]:
@@ -269,7 +269,7 @@ def download(
             and not is_valid_url(current_url)
         ):
             console.print(
-                f"[bold red]Invalid or unsafe URL:[/] {escape(current_url.strip())}"
+                f"[bold cyan]✗[/] Invalid or unsafe URL: {escape(current_url.strip())}"
             )
             console.print("[dim white]Only HTTP/HTTPS URLs are allowed.[/dim white]\n")
             current_url = None
