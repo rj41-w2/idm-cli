@@ -4,7 +4,8 @@ import tempfile
 import threading
 from contextlib import contextmanager
 
-from idm_cli.config import CONFIG_DIR
+from idm_cli.config import CONFIG_DIR, logger
+from idm_cli.downloader.paths import validate_download_paths
 
 __all__ = ["get_incomplete_downloads", "remove_download", "save_download"]
 
@@ -66,9 +67,25 @@ def _read_state() -> dict:
 
 
 def get_incomplete_downloads() -> dict:
-    """Returns the parsed JSON of incomplete downloads."""
+    """Return only tasks whose saved paths remain within configured roots."""
     with _STATE_LOCK, _process_lock():
-        return _read_state()
+        state = _read_state()
+    safe = {}
+    for task_id, data in state.items():
+        try:
+            if not isinstance(data, dict) or not all(
+                isinstance(data.get(key), str)
+                for key in ("url", "format_id", "title", "status")
+            ):
+                raise ValueError("Invalid saved task metadata.")
+            validate_download_paths(
+                data.get("video_dest"), data.get("audio_dest"), data.get("final_dest")
+            )
+        except (ValueError, OSError, RuntimeError):
+            logger.warning("Ignoring an unsafe or invalid saved download.")
+            continue
+        safe[task_id] = data
+    return safe
 
 
 def _write_state(state: dict) -> None:

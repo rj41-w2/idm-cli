@@ -18,6 +18,10 @@ import typer
 
 from idm_cli.config import logger
 from idm_cli.downloader.muxer import convert_to_mp3, mux_audio_video
+from idm_cli.downloader.paths import (
+    download_temp_directory,
+    validate_download_paths,
+)
 from idm_cli.downloader.state import (
     get_incomplete_downloads,
     remove_download,
@@ -63,11 +67,11 @@ def _available_path(path: str) -> str:
     Treats both files and directories as occupied so the returned path
     is always a valid, non-existent file target.
     """
-    if not os.path.exists(path):
+    if not os.path.lexists(path):
         return path
     stem, suffix = os.path.splitext(path)
     index = 1
-    while os.path.exists(f"{stem} ({index}){suffix}"):
+    while os.path.lexists(f"{stem} ({index}){suffix}"):
         index += 1
     return f"{stem} ({index}){suffix}"
 
@@ -86,6 +90,12 @@ def run_download_and_mux(
     title="",
 ):
     """Run the async download + mux pipeline synchronously."""
+    validate_download_paths(video_dest, audio_dest, final_dest)
+    if any(url and url.lower().startswith("http://") for url in (video_url, audio_url)):
+        logger.warning(
+            "This download uses unencrypted HTTP; its contents can be changed in transit. "
+            "Use an HTTPS source when available."
+        )
     from idm_cli.ui.progress import run_with_progress  # lazy — avoids circular
 
     asyncio.run(
@@ -141,6 +151,19 @@ def process_download(
                 break
 
     if found_task_id:
+        try:
+            if not isinstance(found_task_data, dict):
+                raise TypeError("Invalid saved download metadata.")
+            validate_download_paths(
+                found_task_data.get("video_dest"),
+                found_task_data.get("audio_dest"),
+                found_task_data.get("final_dest"),
+            )
+        except (TypeError, ValueError, OSError, RuntimeError) as e:
+            show_error(str(e), "Unsafe saved download")
+            if not is_interactive:
+                raise typer.Exit(code=1)
+            return False
         # Validate that saved temp files still exist before resuming.
         # If they were deleted, fall back to a fresh download.
         saved_video = found_task_data.get("video_dest", "")
@@ -280,7 +303,7 @@ def process_download(
 
         safe_title = sanitize_filename(title)
 
-        from idm_cli.config import CONFIG_DIR, _get_default_download_dir, load_config
+        from idm_cli.config import _get_default_download_dir, load_config
         from idm_cli.downloader.muxer import get_ffmpeg_path
 
         if needs_ffmpeg and not get_ffmpeg_path():
@@ -292,11 +315,19 @@ def process_download(
                 return False
 
         config = load_config()
-        downloads_dir = config.get("download_dir", _get_default_download_dir())
+        downloads_dir = os.path.abspath(
+            config.get("download_dir", _get_default_download_dir())
+        )
         os.makedirs(downloads_dir, exist_ok=True)
 
-        tmp_dir = os.path.join(CONFIG_DIR, "tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
+        try:
+            tmp_dir = str(download_temp_directory())
+        except (ValueError, OSError, RuntimeError) as e:
+            show_error(str(e), "Unsafe temporary directory")
+            if not is_interactive:
+                raise typer.Exit(code=1)
+            return False
+        os.makedirs(tmp_dir, mode=0o700, exist_ok=True)
         tmp_stem = f"{safe_title}_{task_id}"
 
         if format_id == "direct_file":

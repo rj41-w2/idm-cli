@@ -91,6 +91,10 @@ dev = [
     "ruff",
 ]
 
+[dependency-groups]
+# Tools for CI installation and isolated release builds are resolved in uv.lock.
+build = ["build", "twine", "setuptools>=64", "wheel"]
+
 [project.urls]
 Homepage = "https://github.com/rj41-w2/idm-cli"
 Repository = "https://github.com/rj41-w2/idm-cli"

@@ -9,17 +9,21 @@ from idm_cli.downloader.state import (
 
 
 def test_save_and_get_download(tmp_path):
+    temp = tmp_path / "tmp"
+    temp.mkdir()
     with patch("idm_cli.downloader.state.STATE_DIR", str(tmp_path)), patch(
         "idm_cli.downloader.state.STATE_FILE", str(tmp_path / "state.json")
+    ), patch("idm_cli.config.CONFIG_DIR", str(tmp_path)), patch(
+        "idm_cli.config.load_config", return_value={"download_dir": str(tmp_path)}
     ):
         save_download(
             "task1",
             "http://example.com",
             "direct_file",
             "test.txt",
-            "/tmp/v",
-            "/tmp/a",
-            "/tmp/final",
+            str(temp / "v"),
+            str(temp / "a"),
+            str(tmp_path / "final"),
         )
         state = get_incomplete_downloads()
         assert "task1" in state
