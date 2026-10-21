@@ -16,6 +16,7 @@ from rich.markup import escape
 
 from idm_cli.config import CONFIG_DIR, logger
 from idm_cli.downloader.core import run_download_and_mux
+from idm_cli.downloader.paths import validate_download_paths
 from idm_cli.downloader.state import get_incomplete_downloads, remove_download
 from idm_cli.extractors import get_extractor
 from idm_cli.ui.prompts import (
@@ -233,6 +234,15 @@ def handle_resume(is_interactive: bool) -> tuple[str, dict] | None:
 
     action, tid = result
     task_data = incomplete[tid]
+    try:
+        validate_download_paths(
+            task_data["video_dest"], task_data["audio_dest"], task_data["final_dest"]
+        )
+    except (ValueError, OSError, RuntimeError) as e:
+        show_error(str(e), "Unsafe saved download")
+        if not is_interactive:
+            raise typer.Exit(code=1)
+        return None
 
     if action == "delete":
         remove_download(tid)

@@ -235,11 +235,16 @@ async def run_with_progress(
                 # Always cancel both tasks to prevent leaks on exception
                 for task in (listener, refresh_task):
                     task.cancel()
-                for task in (listener, refresh_task):
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+                # Gather consumes cancellation of our child tasks as results.
+                # Cancellation of this parent while awaiting cleanup still raises.
+                cleanup_results = await asyncio.gather(
+                    listener, refresh_task, return_exceptions=True
+                )
+                for error in cleanup_results:
+                    if isinstance(error, BaseException) and not isinstance(
+                        error, asyncio.CancelledError
+                    ):
+                        raise error
 
         # Re-raise the first real exception after Live has closed cleanly
         for r in results:
