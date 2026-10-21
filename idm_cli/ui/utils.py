@@ -146,6 +146,12 @@ console = Console()
 
 
 CHANGELOG = {
+    "1.3.5": [
+        "Added download-path validation to block path traversal outside the output directory.",
+        "Added SECURITY.md documenting the project's security policy and reporting process.",
+        "Pinned build and release dependencies for reproducible builds.",
+        "Preserved download cancellation so an interrupted run stops cleanly without corrupting resume state.",
+    ],
     "1.3.4": [
         "Fixed downloads failing with HTTP 403 on servers that reject the impersonated browser User-Agent.",
         "Fixed resume for direct files: the extractor is resolved once instead of twice.",

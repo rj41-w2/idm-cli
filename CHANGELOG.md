@@ -4,6 +4,8 @@ All notable changes to IDM-CLI are documented here.
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-10-21
+
 ### Added
 
 - README "Security" section documenting what IDM-CLI does and does not protect
@@ -14,6 +16,11 @@ All notable changes to IDM-CLI are documented here.
 - A terminal demo GIF in the README, recorded from real runs.
 - **PyPI discoverability:** `keywords` and a full classifier set, so the package
   matches searches for "idm", "idm cli", and "internet download manager".
+- **Download path validation** to prevent path traversal outside the chosen output
+  directory.
+- **SECURITY.md** documenting the project's security policy and reporting process.
+- **Pinned build/release dependencies** (`requirements/ci.txt`, `requirements/release.txt`)
+  for reproducible builds.
 
 ### Changed
 
@@ -29,6 +36,13 @@ All notable changes to IDM-CLI are documented here.
 - **Progress bar no longer mislabels direct files.** A PDF or archive downloaded
   through the single-stream path showed a bar reading "Video"; it now shows the
   real media type ("PDF File").
+- **Cancellation is preserved:** an interrupted download now stops cleanly without
+  corrupting resume state.
+
+### Security
+
+- Download destination paths are validated to block traversal outside the output
+  directory.
 
 ## [1.3.4] - 2026-10-11
 
