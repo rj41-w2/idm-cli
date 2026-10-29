@@ -28,20 +28,6 @@ from idm_cli.downloader.state import (
     save_download,
 )
 from idm_cli.extractors import get_extractor
-from idm_cli.ui.prompts import (
-    ask_ffmpeg_install,
-    ask_quality,
-    install_ffmpeg,
-    setup_ctrl_c,
-    show_download_cancelled,
-    show_download_start,
-    show_error,
-    show_initializing,
-    show_queued,
-    show_resuming,
-    show_success,
-)
-from idm_cli.ui.utils import console, sanitize_filename
 
 __all__ = ["process_download", "run_download_and_mux"]
 
@@ -140,6 +126,23 @@ def process_download(
     url_to_extract = current_url
     title = ""
     format_id = None
+
+    # Lazy import to avoid downloader/* importing ui/* at module level
+    # (see idm_cli/AGENTS.md layering rule).
+    from idm_cli.ui.prompts import (
+        ask_ffmpeg_install,
+        ask_quality,
+        install_ffmpeg,
+        setup_ctrl_c,
+        show_download_cancelled,
+        show_download_start,
+        show_error,
+        show_initializing,
+        show_queued,
+        show_resuming,
+        show_success,
+    )
+    from idm_cli.ui.utils import console, sanitize_filename
 
     # ── auto-resume check ──────────────────────────────────────────────────────
     if not found_task_id:

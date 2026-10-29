@@ -6,6 +6,8 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/idm-cli?color=blue&label=pypi%20version)](https://pypi.org/project/idm-cli/)
 [![Downloads](https://static.pepy.tech/badge/idm-cli)](https://pepy.tech/project/idm-cli)
+[![SonarCloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=rj41-w2_idm-cli&metric=alert_status)](https://sonarcloud.io/project/overview?id=rj41-w2_idm-cli)
+[![CodeRabbit AI Code Review](https://img.shields.io/badge/CodeRabbit-AI%20Code%20Review-7c3aed?logo=github)](https://github.com/rj41-w2/idm-cli/pulls)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/rj41-w2/idm-cli/blob/main/LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 [![Install](https://img.shields.io/badge/install-pip%20install%20idm--cli-brightgreen)](https://pypi.org/project/idm-cli/)
