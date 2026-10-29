@@ -10,8 +10,6 @@ import zipfile
 import aiofiles
 from curl_cffi.requests import AsyncSession
 
-from idm_cli.ui.utils import console
-
 logger = logging.getLogger(__name__)
 
 _system = platform.system()
@@ -48,6 +46,10 @@ def get_ffmpeg_path() -> str:
 
 async def download_ffmpeg() -> str:
     from idm_cli.config import CONFIG_DIR
+
+    # Lazy import to avoid downloader/* importing ui/* at module level
+    # (see idm_cli/AGENTS.md layering rule).
+    from idm_cli.ui.utils import console
 
     if _is_windows:
         url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"

@@ -4,6 +4,29 @@ All notable changes to IDM-CLI are documented here.
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-10-29
+
+### Added
+
+- macOS CI coverage for Python 3.8, 3.11, and 3.13.
+
+### Changed
+
+- Defer downloader UI imports until runtime to keep the downloader independent
+  from the UI at module import time.
+- Add SonarCloud and CodeRabbit badges to the README and share the SonarCloud
+  project binding for VS Code.
+
+### Fixed
+
+- Create config temporary files beside the target file so atomic replacement
+  also works when the configured path is on another filesystem.
+
+### Tests and CI
+
+- Pin the Python 3.8 Ubuntu job to Ubuntu 24.04 and run it on macOS Intel; run
+  the macOS Python 3.11 and 3.13 jobs on Apple Silicon.
+
 ## [1.3.5] - 2026-10-21
 
 ### Added

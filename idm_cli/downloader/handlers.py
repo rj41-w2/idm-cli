@@ -19,14 +19,6 @@ from idm_cli.downloader.core import run_download_and_mux
 from idm_cli.downloader.paths import validate_download_paths
 from idm_cli.downloader.state import get_incomplete_downloads, remove_download
 from idm_cli.extractors import get_extractor
-from idm_cli.ui.prompts import (
-    ask_resume_action,
-    show_error,
-    show_queue_empty,
-    show_queue_item_start,
-    show_success,
-)
-from idm_cli.ui.utils import console
 
 __all__ = ["handle_queue", "handle_resume"]
 
@@ -108,6 +100,16 @@ def _release_lock() -> None:
 
 
 def handle_queue(is_interactive: bool, loop_chunks: int) -> None:
+    # Lazy import to avoid downloader/* importing ui/* at module level
+    # (see idm_cli/AGENTS.md layering rule).
+    from idm_cli.ui.prompts import (
+        show_error,
+        show_queue_empty,
+        show_queue_item_start,
+        show_success,
+    )
+    from idm_cli.ui.utils import console
+
     if not _acquire_lock():
         show_error("Queue daemon is already running!")
         if not is_interactive:
@@ -224,6 +226,11 @@ def handle_resume(is_interactive: bool) -> tuple[str, dict] | None:
     Returns (task_id, task_data) tuple if user chose to resume,
     or None if cancelled / deleted / no downloads.
     """
+    # Lazy import to avoid downloader/* importing ui/* at module level
+    # (see idm_cli/AGENTS.md layering rule).
+    from idm_cli.ui.prompts import ask_resume_action, show_error
+    from idm_cli.ui.utils import console
+
     incomplete = get_incomplete_downloads()
     result = ask_resume_action(incomplete)
 

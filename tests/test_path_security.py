@@ -117,8 +117,8 @@ def test_delete_validates_all_paths_before_removing_any(download_paths, tmp_path
     data = task((video, str(victim), final))
     with patch.object(
         handlers, "get_incomplete_downloads", return_value={"task": data}
-    ), patch.object(
-        handlers, "ask_resume_action", return_value=("delete", "task")
+    ), patch(
+        "idm_cli.ui.prompts.ask_resume_action", return_value=("delete", "task")
     ), patch.object(handlers, "remove_download") as remove:
         assert handlers.handle_resume(True) is None
         remove.assert_not_called()

@@ -119,10 +119,15 @@ def load_config() -> dict:
 
 
 def save_config(config_data: dict) -> None:
-    os.makedirs(CONFIG_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     try:
+        # Write the temp file next to the target so os.replace never fails with
+        # EXDEV (cross-device link) when CONFIG_FILE is patched to a different
+        # filesystem in tests.
         fd, temp_path = tempfile.mkstemp(
-            dir=CONFIG_DIR, prefix="config_", suffix=".json"
+            dir=os.path.dirname(CONFIG_FILE),
+            prefix="config_",
+            suffix=".json",
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
