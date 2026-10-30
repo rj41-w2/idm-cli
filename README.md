@@ -12,7 +12,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 [![Install](https://img.shields.io/badge/install-pip%20install%20idm--cli-brightgreen)](https://pypi.org/project/idm-cli/)
 
-[Download via PyPI](https://pypi.org/project/idm-cli/) · [Report a Bug](https://github.com/rj41-w2/idm-cli/issues)
+[Website](https://rj41-w2.github.io/idm-cli/) · [Download via PyPI](https://pypi.org/project/idm-cli/) · [Report a Bug](https://github.com/rj41-w2/idm-cli/issues)
 
 </div>
 

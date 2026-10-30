@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f2e9">
+    <meta
+      name="description"
+      content="IDM-CLI is a free, open-source download manager for your terminal. Split downloads into parallel chunks, resume them, and grab video or audio across Windows, macOS, and Linux."
+    >
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="IDM-CLI — Downloads in full flow">
+    <meta
+      property="og:description"
+      content="A fast, resumable download manager for the terminal."
+    >
+    <meta property="og:url" content="https://rj41-w2.github.io/idm-cli/">
+    <meta property="og:image" content="https://rj41-w2.github.io/idm-cli/demo.gif">
+    <meta property="og:image:alt" content="IDM-CLI downloading a file in the terminal">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="canonical" href="https://rj41-w2.github.io/idm-cli/">
+    <title>IDM-CLI — Downloads in full flow</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./style.css">
+    <script src="./script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="IDM-CLI home">
+        <span class="brand-mark" aria-hidden="true">↓</span>
+        <span>IDM<span class="brand-dash">-</span>CLI</span>
+      </a>
+
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="site-nav"
+      >
+        <span class="nav-toggle-label">Menu</span>
+        <span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i></span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#install">Install</a>
+        <a class="nav-github" href="https://github.com/rj41-w2/idm-cli">
+          View on GitHub <span aria-hidden="true">↗</span>
+        </a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero section-wrap" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot"></span> Open source · Python 3.8+</p>
+          <h1 id="hero-title">Downloads,<br><span>in full flow.</span></h1>
+          <p class="hero-description">
+            A download manager for your terminal. Split files into parallel
+            chunks, pick up where you left off, and keep your downloads moving.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#install">
+              Get started <span aria-hidden="true">↓</span>
+            </a>
+            <a class="button button-secondary" href="https://github.com/rj41-w2/idm-cli">
+              Explore the repo <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+
+          <div class="hero-install" aria-label="Quick install command">
+            <code><span class="prompt-symbol">$</span> pip install idm-cli</code>
+            <button class="copy-button" type="button" data-copy="pip install idm-cli" aria-label="Copy pip install command">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <rect x="7" y="6" width="9" height="11" rx="1.5"></rect>
+                <path d="M13 6V4.5A1.5 1.5 0 0 0 11.5 3h-7A1.5 1.5 0 0 0 3 4.5v9A1.5 1.5 0 0 0 4.5 15H7"></path>
+              </svg>
+            </button>
+          </div>
+          <p class="copy-feedback" aria-live="polite"></p>
+        </div>
+
+        <figure class="hero-terminal">
+          <div class="terminal-bar">
+            <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <figcaption>idm — live download</figcaption>
+            <span class="terminal-status">RUNNING</span>
+          </div>
+          <img
+            src="./demo.gif"
+            alt="IDM-CLI terminal demo showing a multi-chunk download, live progress, and the saved file path"
+            fetchpriority="high"
+          >
+          <div class="terminal-caption"><span>REAL TERMINAL OUTPUT</span><span>8 PARALLEL CHUNKS</span></div>
+        </figure>
+      </section>
+
+      <section class="platform-strip" aria-label="Supported platforms and download options">
+        <div class="section-wrap platform-inner">
+          <span class="platform-label">Built for your terminal</span>
+          <div class="platform-list">
+            <span><b aria-hidden="true">⌘</b> macOS</span>
+            <span><b aria-hidden="true">⊞</b> Windows</span>
+            <span><b aria-hidden="true">◉</b> Linux</span>
+          </div>
+          <span class="platform-note">Files · video · audio</span>
+        </div>
+      </section>
+
+      <section class="section-wrap content-section" id="features" aria-labelledby="features-title">
+        <div class="section-heading">
+          <p class="eyebrow">01 / What it does</p>
+          <h2 id="features-title">Less waiting.<br><span>More getting done.</span></h2>
+          <p>Small command. Serious download flow.</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <span class="feature-number">01</span>
+            <div class="feature-icon icon-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <h3>Parallel by design</h3>
+            <p>Split supported files into 1–32 concurrent chunks. Start with 8 and tune it to your connection.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">02</span>
+            <div class="feature-icon icon-resume" aria-hidden="true">↻</div>
+            <h3>Resume right there</h3>
+            <p>Interrupted? Run the same link again and continue from the saved progress.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">03</span>
+            <div class="feature-icon icon-media" aria-hidden="true">▶</div>
+            <h3>Files and media</h3>
+            <p>Download direct links or use yt-dlp support for video and audio from supported sites.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">04</span>
+            <div class="feature-icon icon-queue" aria-hidden="true">≡</div>
+            <h3>Queue it up</h3>
+            <p>Add downloads to a queue and process them sequentially when you’re ready.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="how-section" id="how-it-works" aria-labelledby="how-title">
+        <div class="section-wrap how-grid">
+          <div class="how-copy">
+            <p class="eyebrow">02 / The flow</p>
+            <h2 id="how-title">One link.<br><span>Many lanes.</span></h2>
+            <p>
+              IDM-CLI checks the URL, prepares the download, and uses parallel
+              byte ranges when the server supports them. Progress is saved so
+              an interrupted download can continue later.
+            </p>
+            <a class="text-link" href="https://github.com/rj41-w2/idm-cli#architecture">
+              See how it works <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <div class="flow-card">
+            <p class="flow-card-label">RANGE REQUESTS → ONE FILE</p>
+            <svg class="flow-sketch" viewBox="0 0 480 190" role="img" aria-labelledby="flow-title flow-desc">
+              <title id="flow-title">Parallel download flow</title>
+              <desc id="flow-desc">Four download ranges flow in parallel and join into one file.</desc>
+              <path d="M28 30h145c28 0 30 48 58 60m-203-20h145c28 0 30 15 58 20m-203 20h145c28 0 30-15 58-20m-203 60h145c28 0 30-48 58-60m0 0h95" />
+              <path class="flow-arrow" d="m314 82 15 8-15 8" />
+              <rect x="341" y="50" width="68" height="88" rx="4" />
+              <path class="flow-file-line" d="M356 81h38m-38 13h38m-38 13h25" />
+              <circle cx="28" cy="30" r="5" /><circle cx="28" cy="70" r="5" />
+              <circle cx="28" cy="110" r="5" /><circle cx="28" cy="150" r="5" />
+            </svg>
+            <div class="flow-card-footer"><span>PARALLEL</span><span>RESUMABLE</span><span>MERGED</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-wrap install-section" id="install" aria-labelledby="install-title">
+        <div class="install-heading">
+          <p class="eyebrow">03 / 60-second quickstart</p>
+          <h2 id="install-title">Start your<br><span>first download.</span></h2>
+          <p>Install IDM-CLI, paste a direct file link, and run it. You need Python 3.8 or newer. Some video formats need FFmpeg for muxing, and MP3 conversion requires it.</p>
+        </div>
+
+        <div class="install-panel">
+          <div class="panel-title"><span>01</span><strong>Install from PyPI</strong><span class="panel-tag">RECOMMENDED</span></div>
+          <div class="code-row">
+            <code><span>$</span> pip install idm-cli</code>
+            <button class="copy-button copy-button-light" type="button" data-copy="pip install idm-cli" aria-label="Copy install command">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7" y="6" width="9" height="11" rx="1.5"></rect><path d="M13 6V4.5A1.5 1.5 0 0 0 11.5 3h-7A1.5 1.5 0 0 0 3 4.5v9A1.5 1.5 0 0 0 4.5 15H7"></path></svg>
+            </button>
+          </div>
+          <div class="panel-title panel-title-second"><span>02</span><strong>Start a download</strong></div>
+          <div class="code-row">
+            <code><span>$</span> idm "https://httpbin.org/bytes/1024"</code>
+            <button class="copy-button copy-button-light" type="button" data-copy='idm "https://httpbin.org/bytes/1024"' aria-label="Copy example command">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7" y="6" width="9" height="11" rx="1.5"></rect><path d="M13 6V4.5A1.5 1.5 0 0 0 11.5 3h-7A1.5 1.5 0 0 0 3 4.5v9A1.5 1.5 0 0 0 4.5 15H7"></path></svg>
+            </button>
+          </div>
+          <p class="install-note" aria-live="polite"></p>
+          <div class="install-links">
+            <a href="https://pypi.org/project/idm-cli/">PyPI package <span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/rj41-w2/idm-cli#prerequisites">FFmpeg setup <span aria-hidden="true">↗</span></a>
+          </div>
+          <details class="ffmpeg-details">
+            <summary>Install FFmpeg manually</summary>
+            <div class="ffmpeg-options">
+              <p><strong>macOS</strong><code>brew install ffmpeg</code></p>
+              <p><strong>Windows</strong><code>winget install ffmpeg</code></p>
+              <p><strong>Debian / Ubuntu</strong><code>sudo apt install ffmpeg</code></p>
+            </div>
+          </details>
+          <details class="quickstart-details">
+            <summary>Resume a download or queue one</summary>
+            <div class="quickstart-options">
+              <article>
+                <h3>Resume</h3>
+                <p>Run the same URL again to continue a saved matching download.</p>
+                <code>idm "https://httpbin.org/bytes/1024"</code>
+              </article>
+              <article>
+                <h3>Queue</h3>
+                <p>Add a link with <code>-Q</code>, then type <code>start queue</code> in IDM-CLI.</p>
+                <code>idm "https://httpbin.org/bytes/1024" -Q</code>
+              </article>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="section-wrap examples-section" aria-labelledby="examples-title">
+        <div class="examples-intro">
+          <p class="eyebrow">04 / Shortcuts</p>
+          <h2 id="examples-title">A few flags.<br><span>Your way.</span></h2>
+        </div>
+        <div class="examples-list">
+          <div class="example-row"><code>idm "<em>url</em>" -c 16</code><span>Use 16 parallel chunks</span></div>
+          <div class="example-row"><code>idm "<em>url</em>" -a</code><span>Download audio as MP3</span></div>
+          <div class="example-row"><code>idm "<em>url</em>" -Q</code><span>Add a download to the queue</span></div>
+        </div>
+        <details class="flag-reference">
+          <summary>See all command-line options</summary>
+          <dl class="flag-list">
+            <div><dt><code>-q &lt;resolution&gt;</code></dt><dd>Choose a video quality, such as <code>1080p</code>.</dd></div>
+            <div><dt><code>-a</code></dt><dd>Download audio and convert it to MP3.</dd></div>
+            <div><dt><code>-v</code></dt><dd>Download video and audio without the quality prompt.</dd></div>
+            <div><dt><code>-Q</code></dt><dd>Add the URL to the download queue.</dd></div>
+            <div><dt><code>-c &lt;number&gt;</code></dt><dd>Set parallel chunks from 1 to 32; default is 8.</dd></div>
+            <div><dt><code>-f &lt;filename&gt;</code></dt><dd>Save the download with a custom filename.</dd></div>
+          </dl>
+        </details>
+      </section>
+
+      <section class="security-section" aria-labelledby="security-title">
+        <div class="section-wrap security-inner">
+          <div>
+            <p class="eyebrow">05 / A straight answer</p>
+            <h2 id="security-title">A download manager.<br><span>Not an antivirus.</span></h2>
+            <p>IDM-CLI does not scan downloads for malware. Its URL check blocks specified literal private, loopback, link-local, reserved, and unspecified IP address categories and reserved hostnames, but it does not resolve DNS names or recheck redirect targets, so a redirect may still reach a private address. IDM-CLI avoids shell execution and verifies the checksum when it auto-installs FFmpeg. Keep your operating system’s antivirus enabled.</p>
+            <a class="text-link" href="https://github.com/rj41-w2/idm-cli#security">Read the security notes <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-wrap faq-section" aria-labelledby="faq-title">
+        <p class="eyebrow">06 / Good to know</p>
+        <h2 id="faq-title">Before you <span>press enter.</span></h2>
+        <div class="faq-grid">
+          <article><h3>Does it work on macOS?</h3><p>Yes. IDM-CLI supports macOS, Windows, and Linux. Install FFmpeg with Homebrew if you need muxing or MP3 conversion: <code>brew install ffmpeg</code>.</p></article>
+          <article><h3>Will every server use chunks?</h3><p>Only when the server supports byte-range requests. If it ignores ranges, IDM-CLI falls back to a single download stream.</p></article>
+          <article><h3>Which media sources work?</h3><p>README examples include YouTube, Facebook, and Instagram. Supported formats depend on the source; IDM-CLI currently needs direct HTTP(S) media URLs, not HLS or DASH manifests.</p></article>
+        </div>
+        <details class="troubleshooting">
+          <summary>Common troubleshooting</summary>
+          <div class="troubleshoot-grid">
+            <article><h3>Chunks are not speeding things up</h3><p>Parallel ranges depend on server support. If a server ignores range requests, IDM-CLI automatically uses one stream.</p></article>
+            <article><h3>Media conversion fails</h3><p>Install FFmpeg and make sure it is available on PATH, or use IDM-CLI’s automatic installer for supported operations.</p></article>
+            <article><h3>Windows blocks the app</h3><p>If Device Guard blocks the executable, run the Python module instead: <code>python -m idm_cli</code>.</p></article>
+          </div>
+          <a class="text-link" href="https://github.com/rj41-w2/idm-cli#troubleshooting-windows-device-guard">More troubleshooting notes <span aria-hidden="true">↗</span></a>
+        </details>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="section-wrap footer-inner">
+        <a class="brand footer-brand" href="#top"><span class="brand-mark" aria-hidden="true">↓</span><span>IDM<span class="brand-dash">-</span>CLI</span></a>
+        <p>Open source. Terminal native. Keep your downloads moving.</p>
+        <div class="footer-links">
+          <a href="https://github.com/rj41-w2/idm-cli">GitHub</a>
+          <a href="https://pypi.org/project/idm-cli/">PyPI</a>
+          <a href="https://github.com/rj41-w2/idm-cli/issues">Issues</a>
+          <a href="https://github.com/rj41-w2/idm-cli/blob/main/CHANGELOG.md">Changelog</a>
+        </div>
+      </div>
+      <div class="section-wrap footer-bottom"><span>© IDM-CLI · MIT License</span><span>Made for the command line <b aria-hidden="true">↗</b></span></div>
+    </footer>
+  </body>
+</html>
